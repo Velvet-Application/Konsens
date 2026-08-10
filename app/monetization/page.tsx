@@ -51,6 +51,8 @@ export default function MonetizationAdmin() {
     setClients((clientRows.data ?? []) as SdkClient[]);
   };
 
+  // This page hydrates an admin-only dashboard from Supabase once on mount.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, []);
 
   const createClient = async (event: FormEvent) => {
