@@ -61,7 +61,10 @@ struct KonsensMark: View {
             if !compact {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Konsens").font(.headline.bold())
-                    Text("PRÉDIRE · APPRENDRE · INVESTIR").font(.system(size: 6.5, weight: .bold)).tracking(0.8).foregroundStyle(.konsensMuted)
+                    Text("PRÉDIRE · APPRENDRE · INVESTIR")
+                        .font(.system(size: 6.5, weight: .bold))
+                        .tracking(0.8)
+                        .foregroundStyle(Color.konsensMuted)
                 }
             }
         }
