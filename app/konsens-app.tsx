@@ -1,77 +1,81 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
-type Tab = "signal" | "markets" | "league" | "identity";
-const marketData = [
-  { tag: "MACRO · 119 J", question: "La BCE baissera-t-elle ses taux avant le 31 décembre ?", yes: 63, delta: "+4.2" },
-  { tag: "INDICES · 5 J", question: "Le CAC 40 terminera-t-il la semaine au-dessus de 8 200 points ?", yes: 46, delta: "−2.1" },
-  { tag: "TECH · 140 J", question: "Apple dépassera-t-elle 4 000 Md$ de capitalisation cette année ?", yes: 57, delta: "+7.0" },
-];
-const leaders = [["01","MacroKing","+18,9"],["02","ClaraQuant","+14,2"],["03","NordCapital","+9,1"],["04","CyrilG","+6,8"],["05","LucidBear","+5,4"]];
+type Tab = "home" | "learn" | "invest" | "league";
+type Choice = "etf" | "stock" | "prediction";
+
+const options = {
+  etf: { name: "ETF Monde", rate: 7, risk: "Modéré", color: "blue", icon: "◎", detail: "Un panier de plus de 1 400 entreprises mondiales." },
+  stock: { name: "Action Airbus", rate: 10, risk: "Élevé", color: "violet", icon: "A", detail: "Une seule entreprise : plus de potentiel, mais plus de risque." },
+  prediction: { name: "Prédiction BCE", rate: 58.73, risk: "Très élevé", color: "orange", icon: "?", detail: "Tout ou rien selon l’événement. Le gain dépend du prix d’entrée." },
+} as const;
+
+const rankings = [[1,"Clara",12480,24.8],[2,"Mehdi",11870,18.7],[3,"Cyril",11260,12.6],[4,"Emma",10940,9.4],[5,"Lucas",10710,7.1]];
 
 export default function KonsensApp() {
-  const [tab, setTab] = useState<Tab>("signal");
-  const [credits, setCredits] = useState(18420);
-  const [streak, setStreak] = useState(6);
-  const [answer, setAnswer] = useState<"OUI"|"NON"|null>(null);
-  const [market, setMarket] = useState<(typeof marketData)[number]|null>(null);
-  const [notice, setNotice] = useState("");
-  const alert = (text:string) => { setNotice(text); window.setTimeout(()=>setNotice(""),2200); };
-  const vote = (value:"OUI"|"NON") => { if(answer)return; setAnswer(value);setStreak(v=>v+1);alert(`Conviction ${value} enregistrée`); };
-  const buy = (value:"OUI"|"NON") => { setCredits(v=>v-250);setMarket(null);alert(`250 crédits exposés sur ${value}`); };
+  const [tab, setTab] = useState<Tab>("home");
+  const [balance, setBalance] = useState(10000);
+  const [amount, setAmount] = useState(1000);
+  const [choice, setChoice] = useState<Choice>("etf");
+  const [months, setMonths] = useState(12);
+  const [toast, setToast] = useState("");
+  const notify = (value:string) => { setToast(value); window.setTimeout(()=>setToast(""),2200); };
+  const invest = () => { if(amount>balance)return notify("Montant supérieur à ton solde");setBalance(v=>v-amount);notify(`${amount.toLocaleString("fr-FR")} € virtuels placés`); };
 
-  return <main className="terminal">
-    <header className="masthead">
-      <button className="wordmark" onClick={()=>setTab("signal")}><i>K</i><span>KONSENS</span><small>01</small></button>
-      <div className="market-clock"><b>EURONEXT</b><span className="pulse"/>OUVERT <time>10:14:38</time></div>
-      <button className="player" onClick={()=>setTab("identity")}><span>CG</span><b>4</b></button>
+  return <main className="k-app">
+    <header className="k-header">
+      <button className="k-logo" onClick={()=>setTab("home")}><span>K</span><b>Konsens</b></button>
+      <nav><Nav active={tab==="home"} label="Accueil" onClick={()=>setTab("home")}/><Nav active={tab==="learn"} label="Apprendre" onClick={()=>setTab("learn")}/><Nav active={tab==="invest"} label="Investir" onClick={()=>setTab("invest")}/><Nav active={tab==="league"} label="Classement" onClick={()=>setTab("league")}/></nav>
+      <button className="profile-pill"><span>CG</span><b>Niv. 3</b></button>
     </header>
 
-    <aside className="index-nav">
-      <p>ARENA / 26</p>
-      <Nav number="01" label="Signal" active={tab==="signal"} onClick={()=>setTab("signal")}/>
-      <Nav number="02" label="Marchés" active={tab==="markets"} onClick={()=>setTab("markets")}/>
-      <Nav number="03" label="Ligue" active={tab==="league"} onClick={()=>setTab("league")}/>
-      <Nav number="04" label="Identité" active={tab==="identity"} onClick={()=>setTab("identity")}/>
-      <div className="season-index"><span>SAISON</span><strong>01</strong><em>J−12</em><div><i/></div><small>ARGENT · POSITION 04</small></div>
-    </aside>
-
-    <section className="viewport">
-      {tab==="signal" && <Signal credits={credits} streak={streak} answer={answer} vote={vote} openMarket={setMarket} goMarkets={()=>setTab("markets")}/>} 
-      {tab==="markets" && <Markets openMarket={setMarket}/>} 
-      {tab==="league" && <League alert={alert}/>} 
-      {tab==="identity" && <Identity streak={streak}/>} 
+    <section className="k-content">
+      {tab==="home"&&<Home balance={balance} goLearn={()=>setTab("learn")} goInvest={()=>setTab("invest")}/>} 
+      {tab==="learn"&&<Learn amount={amount} setAmount={setAmount} choice={choice} setChoice={setChoice} months={months} setMonths={setMonths}/>} 
+      {tab==="invest"&&<Invest balance={balance} amount={amount} setAmount={setAmount} choice={choice} setChoice={setChoice} months={months} setMonths={setMonths} invest={invest}/>} 
+      {tab==="league"&&<League/>}
     </section>
 
-    <div className="ticker-tape"><div><span>AIR <b>+1.24%</b></span><span>CAC 40 <b>+0.38%</b></span><span>CONSENSUS BCE <b>63%</b></span><span>TON RANG <b>#04 ↗</b></span><span>PROCHAINE CLÔTURE <b>05:42:18</b></span><span>AIR <b>+1.24%</b></span><span>CAC 40 <b>+0.38%</b></span></div></div>
-    <nav className="thumb-nav"><Nav number="01" label="Signal" active={tab==="signal"} onClick={()=>setTab("signal")}/><Nav number="02" label="Marchés" active={tab==="markets"} onClick={()=>setTab("markets")}/><Nav number="03" label="Ligue" active={tab==="league"} onClick={()=>setTab("league")}/><Nav number="04" label="Moi" active={tab==="identity"} onClick={()=>setTab("identity")}/></nav>
-
-    {market && <div className="trade-layer" onClick={()=>setMarket(null)}><section className="trade-console" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setMarket(null)}>FERMER ×</button><p>{market.tag}</p><h2>{market.question}</h2><div className="trade-meter"><span style={{width:`${market.yes}%`}}/><b>{market.yes}%</b><small>CONSENSUS OUI</small></div><div className="ticket"><span>ORDRE</span><b>250 CRÉDITS</b><small>Simulation · aucun argent réel</small></div><div className="binary-actions"><button onClick={()=>buy("OUI")}>ACHETER OUI <b>{market.yes}</b></button><button onClick={()=>buy("NON")}>ACHETER NON <b>{100-market.yes}</b></button></div></section></div>}
-    {notice && <div className="notice"><i/> {notice}</div>}
+    <nav className="k-mobile-nav"><MobileNav icon="⌂" active={tab==="home"} label="Accueil" onClick={()=>setTab("home")}/><MobileNav icon="◉" active={tab==="learn"} label="Apprendre" onClick={()=>setTab("learn")}/><MobileNav icon="↗" active={tab==="invest"} label="Investir" onClick={()=>setTab("invest")}/><MobileNav icon="♛" active={tab==="league"} label="Classement" onClick={()=>setTab("league")}/></nav>
+    {toast&&<div className="k-toast">✓ {toast}</div>}
   </main>;
 }
 
-function Signal({credits,streak,answer,vote,openMarket,goMarkets}:{credits:number;streak:number;answer:"OUI"|"NON"|null;vote:(v:"OUI"|"NON")=>void;openMarket:(m:(typeof marketData)[number])=>void;goMarkets:()=>void}){
+function Home({balance,goLearn,goInvest}:{balance:number;goLearn:()=>void;goInvest:()=>void}){
   return <>
-    <div className="edition"><span>ÉDITION DU 10.08.26</span><b>PARIS · 10:14</b></div>
-    <section className="hero-signal">
-      <div className="hero-copy"><p>TON SIGNAL DU JOUR</p><h1>Lis le monde.<br/><em>Prends position.</em></h1><div className="hero-line"><span/><p>Une conviction aujourd’hui peut<br/>te faire passer sur le podium.</p></div></div>
-      <div className="score-orbit"><div className="orbit orbit-a"/><div className="orbit orbit-b"/><div className="orbit-dot"/><span>VALEUR NETTE</span><strong>{credits.toLocaleString("fr-FR")}</strong><small>CRÉDITS</small><b>↗ 6,8%</b></div>
-    </section>
-    <section className="decision-strip">
-      <div className="decision-meta"><p>DÉFI / 01</p><span>+40 XP</span><b>SÉRIE {streak} J</b></div>
-      <div className="decision-question"><small>CLÔTURE À 20:00 · INFLATION</small><h2>L’inflation française repassera-t-elle sous 2 % avant octobre ?</h2></div>
-      {answer ? <div className="locked-choice"><span>CONVICTION VERROUILLÉE</span><strong>{answer}</strong><small>Consensus révélé à la clôture</small></div> : <div className="binary-actions daily"><button onClick={()=>vote("OUI")}>OUI <b>52</b></button><button onClick={()=>vote("NON")}>NON <b>48</b></button></div>}
-    </section>
-    <section className="market-preview"><div className="vertical-title"><span>03</span><p>MARCHÉS<br/>EN TENSION</p></div><div className="market-rows">{marketData.map((m,i)=><button className="market-line" key={m.question} onClick={()=>openMarket(m)}><span>0{i+1}</span><div><small>{m.tag}</small><strong>{m.question}</strong></div><div className="line-prob"><b>{m.yes}<sup>%</sup></b><i className={m.delta.startsWith("−")?"down":""}>{m.delta}</i></div><em>↗</em></button>)}<button className="all-markets" onClick={goMarkets}>OUVRIR TOUS LES MARCHÉS <b>→</b></button></div></section>
+    <section className="welcome-row"><div><span className="hello">Bonjour Cyril 👋</span><h1>Fais grandir ton argent.<br/><em>Sans risquer le tien.</em></h1><p>Konsens reproduit la vraie vie financière avec de l’argent 100 % virtuel.</p></div><div className="level-ring"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42"/><circle className="progress" cx="50" cy="50" r="42"/></svg><strong>65%</strong><small>NIVEAU 3</small></div></section>
+    <section className="money-panel"><div><span>MON ARGENT VIRTUEL</span><strong>{balance.toLocaleString("fr-FR")} €</strong><small>1 € virtuel = 1 € dans la simulation</small></div><button onClick={goInvest}>Faire travailler mon argent <b>→</b></button></section>
+    <section className="daily-lesson"><div className="lesson-badge">3 min</div><div className="lesson-copy"><span>MISSION DU JOUR · +50 XP</span><h2>Un ETF, c’est quoi exactement ?</h2><p>Découvre comment investir dans des centaines d’entreprises en un seul achat.</p><button onClick={goLearn}>Commencer la mission</button></div><div className="basket-visual"><div className="basket"><i>A</i><i></i><i>N</i><i>V</i></div><span>1 ETF</span><small>= un panier d’entreprises</small></div></section>
+    <section className="dashboard-row"><div className="journey"><header><div><span>TON PARCOURS</span><h2>Apprenti investisseur</h2></div><b>2/5 notions</b></header><div className="journey-line"><i className="done">✓<small>Budget</small></i><span/><i className="done">✓<small>Risque</small></i><span/><i className="current">3<small>ETF</small></i><span/><i>4<small>Actions</small></i><span/><i>5<small>Prédire</small></i></div></div><div className="mini-rank"><span>TA LIGUE</span><strong>#3</strong><p>Tu as gagné 2 places cette semaine</p><div><i style={{width:"72%"}}/></div></div></section>
   </>;
 }
 
-function Markets({openMarket}:{openMarket:(m:(typeof marketData)[number])=>void}){return <section className="editorial-page"><header><p>02 / MARCHÉS</p><h1>Le prix d’une<br/><em>conviction.</em></h1><span>Chaque pourcentage est une photographie du consensus. Entre avant les autres, assume après.</span></header><div className="market-canvas">{marketData.concat(marketData).map((m,i)=><button key={i} className={`market-poster poster-${i%3}`} onClick={()=>openMarket(m)}><span>{String(i+1).padStart(2,"0")}</span><small>{m.tag}</small><h2>{m.question}</h2><div><strong>{m.yes}<sup>%</sup></strong><i>{m.delta}</i></div><em>PRENDRE POSITION →</em></button>)}</div></section>}
+function Learn({amount,setAmount,choice,setChoice,months,setMonths}:{amount:number;setAmount:(n:number)=>void;choice:Choice;setChoice:(c:Choice)=>void;months:number;setMonths:(n:number)=>void}){
+  return <section className="learning-page">
+    <header className="page-heading"><span>APPRENDRE EN JOUANT</span><h1>Que peut devenir ton argent ?</h1><p>Choisis une somme, compare les solutions et comprends chaque calcul.</p></header>
+    <Simulator amount={amount} setAmount={setAmount} choice={choice} setChoice={setChoice} months={months} setMonths={setMonths}/>
+    <section className="concepts"><h2>Les mots à connaître</h2><div><Concept icon="€" title="Capital" text="La somme de départ que tu investis."/><Concept icon="%" title="Rendement" text="Ce que ton placement gagne ou perd, en pourcentage."/><Concept icon="◒" title="Risque" text="La possibilité de récupérer moins que ta mise."/><Concept icon="⌛" title="Horizon" text="La durée pendant laquelle tu laisses travailler l’argent."/></div></section>
+  </section>;
+}
 
-function League({alert}:{alert:(s:string)=>void}){return <section className="editorial-page league-page"><header><p>03 / LIGUE ARGENT</p><h1>Plus haut.<br/><em>Ou plus juste.</em></h1><span>Les six premiers montent. Les convictions fragiles tombent.</span></header><div className="podium-word">04</div><div className="ranking"><div className="ranking-head"><span>RANG</span><span>JOUEUR</span><span>PERFORMANCE</span></div>{leaders.map(([rank,name,score])=><div className={name==="CyrilG"?"rank-line current":"rank-line"} key={name}><span>{rank}</span><strong>{name}</strong><div><b>{score}%</b><i style={{width:`${Math.abs(Number(score.replace(",",".")))*3}%`}}/></div>{name==="CyrilG"&&<em>TOI</em>}</div>)}<button className="invite" onClick={()=>alert("Code KNS-2026 copié")}>+ INVITER UN ADVERSAIRE</button></div></section>}
+function Invest({balance,amount,setAmount,choice,setChoice,months,setMonths,invest}:{balance:number;amount:number;setAmount:(n:number)=>void;choice:Choice;setChoice:(c:Choice)=>void;months:number;setMonths:(n:number)=>void;invest:()=>void}){
+  const result=calculate(amount,choice,months);const item=options[choice];
+  return <section className="invest-page"><header className="page-heading"><span>SIMULATION RÉELLE</span><h1>Prépare ton investissement</h1><p>Solde disponible : <b>{balance.toLocaleString("fr-FR")} € virtuels</b></p></header><div className="invest-layout"><div><Simulator compact amount={amount} setAmount={setAmount} choice={choice} setChoice={setChoice} months={months} setMonths={setMonths}/></div><aside className="order-summary"><span>CE QUI PEUT SE PASSER</span><h2>{item.name}</h2><div className="summary-flow"><p><small>Tu places</small><strong>{amount.toLocaleString("fr-FR")} €</strong></p><b>→</b><p><small>Valeur simulée</small><strong>{result.value.toLocaleString("fr-FR",{maximumFractionDigits:0})} €</strong></p></div><div className="potential-gain"><span>GAIN POTENTIEL</span><strong>+{result.gain.toLocaleString("fr-FR",{maximumFractionDigits:0})} €</strong><small>Scénario pédagogique, jamais garanti</small></div><button className="confirm" onClick={invest}>Confirmer le placement virtuel</button><p className="no-money">Aucun argent réel · aucun retrait possible</p></aside></div></section>;
+}
 
-function Identity({streak}:{streak:number}){return <section className="editorial-page identity-page"><header><p>04 / IDENTITÉ</p><h1>CyrilG.<br/><em>Stratège macro.</em></h1><span>Ton historique compose une identité, pas un simple profil.</span></header><div className="identity-mark">CG<span>NIVEAU 07</span></div><div className="stats-band"><div><span>PRÉCISION</span><strong>68<sup>%</sup></strong></div><div><span>SAISON</span><strong>+6,8<sup>%</sup></strong></div><div><span>SÉRIE</span><strong>{streak}<sup>J</sup></strong></div><div><span>RANG</span><strong>#04</strong></div></div><blockquote>« Conviction macro.<br/>Risque maîtrisé. »<small>Tu bats 72 % de l’arène sur les questions économiques.</small></blockquote></section>}
+function Simulator({amount,setAmount,choice,setChoice,months,setMonths,compact=false}:{amount:number;setAmount:(n:number)=>void;choice:Choice;setChoice:(c:Choice)=>void;months:number;setMonths:(n:number)=>void;compact?:boolean}){
+  const calculations=useMemo(()=>Object.keys(options).map(key=>({key:key as Choice,...calculate(amount,key as Choice,months)})),[amount,months]);
+  return <section className={compact?"simulator compact":"simulator"}>
+    <div className="sim-controls"><label>Je veux utiliser<strong>{amount.toLocaleString("fr-FR")} € virtuels</strong><input aria-label="Somme virtuelle" type="range" min="100" max="5000" step="100" value={amount} onChange={e=>setAmount(Number(e.target.value))}/><div><span>100 €</span><span>5 000 €</span></div></label><label>Je laisse mon argent travailler<strong>{months} mois</strong><input aria-label="Durée" type="range" min="1" max="36" value={months} onChange={e=>setMonths(Number(e.target.value))}/><div><span>1 mois</span><span>3 ans</span></div></label></div>
+    <div className="comparison"><header><span>OPTION</span><span>RISQUE</span><span>GAIN POTENTIEL</span></header>{calculations.map(row=>{const item=options[row.key];return <button key={row.key} className={choice===row.key?`compare-row selected ${item.color}`:`compare-row ${item.color}`} onClick={()=>setChoice(row.key)}><i>{item.icon}</i><div><strong>{item.name}</strong><small>{item.detail}</small></div><span className="risk">{item.risk}</span><div className="gain"><strong>+{row.gain.toLocaleString("fr-FR",{maximumFractionDigits:0})} €</strong><small>{row.formula}</small></div><b className="radio">{choice===row.key?"✓":""}</b></button>})}</div>
+    <div className="teacher-note"><span>💡</span><p><strong>Le plus rentable n’est pas forcément le meilleur choix.</strong> Un gain potentiel élevé signifie généralement que le risque de perdre est aussi plus élevé.</p></div>
+  </section>;
+}
 
-function Nav({number,label,active,onClick}:{number:string;label:string;active:boolean;onClick:()=>void}){return <button className={active?"active":""} onClick={onClick}><span>{number}</span><b>{label}</b><i/></button>}
+function League(){return <section className="league-simple"><header className="page-heading"><span>SAISON 1 · LIGUE DÉCOUVERTE</span><h1>Progresse avec les autres</h1><p>Le classement récompense la performance, mais aussi la régularité et la maîtrise du risque.</p></header><div className="rank-table"><header><span>Rang</span><span>Joueur</span><span>Patrimoine</span><span>Performance</span></header>{rankings.map(([rank,name,value,score])=><div className={name==="Cyril"?"you":""} key={name}><b>{rank}</b><span className="rank-avatar">{String(name).slice(0,1)}</span><strong>{name}{name==="Cyril"&&<small>TOI</small>}</strong><span>{Number(value).toLocaleString("fr-FR")} €</span><em>+{score}%</em></div>)}</div><aside className="league-tip"><span>🏆</span><div><strong>Comment gagner des places ?</strong><p>Diversifie tes placements, évite de tout miser sur une prédiction et reviens suivre tes décisions.</p></div></aside></section>}
+
+function calculate(amount:number,choice:Choice,months:number){if(choice==="prediction"){const price=.63;const units=amount/price;const gain=units-amount;return{gain,value:units,formula:`${amount.toLocaleString("fr-FR")} ÷ 0,63 − mise`}}const annual=options[choice].rate/100;const gain=amount*annual*(months/12);return{gain,value:amount+gain,formula:`${amount.toLocaleString("fr-FR")} × ${options[choice].rate}% × ${months}/12`}}
+function Concept({icon,title,text}:{icon:string;title:string;text:string}){return <article><i>{icon}</i><strong>{title}</strong><p>{text}</p></article>}
+function Nav({active,label,onClick}:{active:boolean;label:string;onClick:()=>void}){return <button className={active?"active":""} onClick={onClick}>{label}</button>}
+function MobileNav({active,label,icon,onClick}:{active:boolean;label:string;icon:string;onClick:()=>void}){return <button className={active?"active":""} onClick={onClick}><i>{icon}</i><span>{label}</span></button>}

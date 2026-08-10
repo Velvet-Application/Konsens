@@ -40,7 +40,7 @@ final class AppStore: ObservableObject {
         guard credits >= 250 else { return }
         credits -= 250
         activeMarket = nil
-        showToast("250 crédits placés sur \(outcome ? "OUI" : "NON")")
+        showToast("250 € virtuels placés sur \(outcome ? "OUI" : "NON")")
     }
 
     func showToast(_ message: String) {
