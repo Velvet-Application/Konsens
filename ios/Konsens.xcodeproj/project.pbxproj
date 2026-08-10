@@ -18,6 +18,7 @@
 		A012 /* KonsensWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B013; };
 		A013 /* KonsensWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B015; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		A014 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B016; };
+		A015 /* NetworkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B017; };
 		B001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KonsensApp.swift; sourceTree = "<group>"; };
 		B002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		B003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
@@ -34,15 +35,16 @@
 		B014 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B015 = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = KonsensWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B016 = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B017 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkView.swift; sourceTree = "<group>"; };
 		C001 = {isa = PBXGroup; children = (C002, C003, C004, C005); path = Konsens; sourceTree = "<group>"; };
 		C002 = {isa = PBXGroup; children = (B001); path = App; sourceTree = "<group>"; };
 		C003 = {isa = PBXGroup; children = (B002, B003, B004); path = Core; sourceTree = "<group>"; };
-		C004 = {isa = PBXGroup; children = (B005, B006, B007, B008, B009, B012); path = Features; sourceTree = "<group>"; };
+		C004 = {isa = PBXGroup; children = (B005, B006, B007, B008, B009, B012, B017); path = Features; sourceTree = "<group>"; };
 		C005 = {isa = PBXGroup; children = (B010, B016); path = Resources; sourceTree = "<group>"; };
 		C006 = {isa = PBXGroup; children = (C001, C008, C007); sourceTree = "<group>"; };
 		C007 = {isa = PBXGroup; children = (B011, B015); name = Products; sourceTree = "<group>"; };
 		C008 = {isa = PBXGroup; children = (B013, B014); path = KonsensWidget; sourceTree = "<group>"; };
-		D001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A001,A002,A003,A004,A005,A006,A007,A008,A009,A010); runOnlyForDeploymentPostprocessing = 0; };
+		D001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A001,A002,A003,A004,A005,A006,A007,A008,A009,A010,A015); runOnlyForDeploymentPostprocessing = 0; };
 		D002 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A011); runOnlyForDeploymentPostprocessing = 0; };
 		D003 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A014); runOnlyForDeploymentPostprocessing = 0; };
 		D004 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A012); runOnlyForDeploymentPostprocessing = 0; };
