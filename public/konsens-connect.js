@@ -59,7 +59,7 @@
       return payload;
     } catch (error) {
       root.innerHTML = '<div style="padding:18px;border:1px solid #e3e7ed;border-radius:18px;font-family:system-ui;background:#fff;color:#17213b">Signal Konsens indisponible.</div>';
-      try { await event("error", { challengeId: challengeId, message: String(error && error.message || error) }); } catch (_) {}
+      try { await event("error", { challengeId: challengeId, message: String(error && error.message || error) }); } catch {}
       throw error;
     }
   }
