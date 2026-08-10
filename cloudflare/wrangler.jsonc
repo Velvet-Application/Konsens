@@ -1,0 +1,25 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "konsens-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "vars": {
+    "ENVIRONMENT": "development",
+    "DEMO_MODE": "true",
+    "SUPABASE_URL": "https://mxuevsspybxoovsutsbs.supabase.co",
+    "ALLOWED_ORIGINS": "http://localhost:3000"
+  },
+  "triggers": { "crons": ["*/15 * * * *"] },
+  "env": {
+    "staging": {
+      "name": "konsens-api-staging",
+      "vars": { "ENVIRONMENT": "staging", "DEMO_MODE": "false", "SUPABASE_URL": "https://mxuevsspybxoovsutsbs.supabase.co", "ALLOWED_ORIGINS": "https://konsens.cyril-62.chatgpt.site" }
+    },
+    "production": {
+      "name": "konsens-api-production",
+      "vars": { "ENVIRONMENT": "production", "DEMO_MODE": "false", "SUPABASE_URL": "https://mxuevsspybxoovsutsbs.supabase.co", "ALLOWED_ORIGINS": "https://konsens.cyril-62.chatgpt.site" }
+    }
+  }
+}

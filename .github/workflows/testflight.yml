@@ -1,0 +1,31 @@
+name: Build TestFlight
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  archive:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Import signing certificate
+        env:
+          CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          security create-keychain -p build konsens-build.keychain
+          security default-keychain -s konsens-build.keychain
+          security unlock-keychain -p build konsens-build.keychain
+          echo "$CERTIFICATE_P12_BASE64" | base64 --decode > /tmp/konsens-signing.p12
+          security import /tmp/konsens-signing.p12 -k konsens-build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k build konsens-build.keychain
+      - name: Install provisioning profile
+        env:
+          PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "$PROFILE_BASE64" | base64 --decode > "$HOME/Library/MobileDevice/Provisioning Profiles/Konsens.mobileprovision"
+      - name: Archive
+        run: xcodebuild -project ios/Konsens.xcodeproj -scheme Konsens -configuration Release -destination generic/platform=iOS -archivePath build/Konsens.xcarchive archive DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}"
+      - uses: actions/upload-artifact@v4
+        with: { name: Konsens-xcarchive, path: build/Konsens.xcarchive, retention-days: 14 }

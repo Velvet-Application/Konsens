@@ -1,0 +1,47 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+		A001 /* KonsensApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B001; };
+		A002 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B002; };
+		A003 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B003; };
+		A004 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B004; };
+		A005 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B005; };
+		A006 /* ArenaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B006; };
+		A007 /* MarketsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B007; };
+		A008 /* LeagueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B008; };
+		A009 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B009; };
+		B001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KonsensApp.swift; sourceTree = "<group>"; };
+		B002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		B003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
+		B004 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		B005 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		B006 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArenaView.swift; sourceTree = "<group>"; };
+		B007 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketsView.swift; sourceTree = "<group>"; };
+		B008 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeagueView.swift; sourceTree = "<group>"; };
+		B009 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		B010 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B011 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Konsens.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C001 = {isa = PBXGroup; children = (C002, C003, C004, C005); path = Konsens; sourceTree = "<group>"; };
+		C002 = {isa = PBXGroup; children = (B001); path = App; sourceTree = "<group>"; };
+		C003 = {isa = PBXGroup; children = (B002, B003, B004); path = Core; sourceTree = "<group>"; };
+		C004 = {isa = PBXGroup; children = (B005, B006, B007, B008, B009); path = Features; sourceTree = "<group>"; };
+		C005 = {isa = PBXGroup; children = (B010); path = Resources; sourceTree = "<group>"; };
+		C006 = {isa = PBXGroup; children = (C001, C007); sourceTree = "<group>"; };
+		C007 = {isa = PBXGroup; children = (B011); name = Products; sourceTree = "<group>"; };
+		D001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A001,A002,A003,A004,A005,A006,A007,A008,A009); runOnlyForDeploymentPostprocessing = 0; };
+		D002 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		D003 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		E001 = {isa = PBXNativeTarget; buildConfigurationList = F001; buildPhases = (D001,D002,D003); buildRules = (); dependencies = (); name = Konsens; productName = Konsens; productReference = B011; productType = "com.apple.product-type.application"; };
+		E002 = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 1600; LastUpgradeCheck = 1600; TargetAttributes = {E001 = {CreatedOnToolsVersion = 16.0;};};}; buildConfigurationList = F002; compatibilityVersion = "Xcode 14.0"; developmentRegion = fr; hasScannedForEncodings = 0; knownRegions = (fr,en,Base); mainGroup = C006; productRefGroup = C007; projectDirPath = ""; projectRoot = ""; targets = (E001); };
+		F001 = {isa = XCConfigurationList; buildConfigurations = (G001,G002); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		F002 = {isa = XCConfigurationList; buildConfigurations = (G003,G004); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		G001 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Konsens/Resources/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.konsens.beta; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; }; name = Debug; };
+		G002 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Konsens/Resources/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.konsens.beta; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; VALIDATE_PRODUCT = YES; }; name = Release; };
+		G003 = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone";}; name = Debug; };
+		G004 = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES;}; name = Release; };
+	};
+	rootObject = E002;
+}

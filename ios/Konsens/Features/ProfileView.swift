@@ -1,0 +1,7 @@
+import SwiftUI
+
+struct ProfileView: View {
+    @EnvironmentObject private var store: AppStore
+    var body: some View { NavigationStack { ScrollView { VStack(alignment:.leading,spacing:20){HStack(spacing:17){Text("CG").font(.title3.bold()).frame(width:70,height:70).background(Color.konsensGreen.opacity(.13),in:Circle());VStack(alignment:.leading){Eyebrow(text:"STRATÈGE · NIVEAU 7");Text("CyrilG").font(.largeTitle.bold());Text("Division Argent").font(.caption).foregroundStyle(.konsensMuted)}};LazyVGrid(columns:[GridItem(.flexible()),GridItem(.flexible())]){ProfileStat(value:"68 %",label:"Prédictions justes");ProfileStat(value:"+6,8 %",label:"Performance saison");ProfileStat(value:"\(store.streak)",label:"Jours de série");ProfileStat(value:"#4",label:"Classement")};VStack(alignment:.leading,spacing:7){Eyebrow(text:"TON STYLE");Text("Conviction macro, risque maîtrisé.").font(.title3.bold());Text("Tu bats 72 % des joueurs sur les questions économiques et conserves davantage de cash que la moyenne.").font(.caption).foregroundStyle(.konsensMuted)}.panel()}.padding(18)}.background(Color.konsensBackground).navigationTitle("Profil").navigationBarTitleDisplayMode(.inline)} }
+}
+private struct ProfileStat:View{let value:String;let label:String;var body:some View{VStack(alignment:.leading,spacing:5){Text(value).font(.title2.monospacedDigit().bold());Text(label).font(.caption2).foregroundStyle(.konsensMuted)}.frame(maxWidth:.infinity,alignment:.leading).panel()}}
