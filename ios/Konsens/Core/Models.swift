@@ -67,6 +67,74 @@ struct Leader: Identifiable {
     let isCurrentUser: Bool
 }
 
+struct SponsoredAd: Identifiable, Hashable {
+    let campaignID: UUID
+    let id: UUID
+    let sponsorName: String
+    let eyebrow: String
+    let headline: String
+    let body: String?
+    let ctaLabel: String
+    let destinationURL: String
+    let placement: String
+}
+
+struct MonetizationSnapshot: Hashable {
+    var advertisers = 0
+    var activeCampaigns = 0
+    var impressions = 0
+    var clicks = 0
+    var sdkClients = 0
+    var ctr: Double { impressions > 0 ? (Double(clicks) / Double(impressions)) * 100 : 0 }
+}
+
+struct PublicWallet: Identifiable, Hashable {
+    let id: UUID
+    let chain: String
+    let address: String
+    let displayName: String
+    let confidenceScore: Int
+    let observableValueEUR: Double?
+
+    var shortAddress: String {
+        guard address.count > 12 else { return address }
+        return "\(address.prefix(6))…\(address.suffix(4))"
+    }
+}
+
+struct WalletEvent: Identifiable, Hashable {
+    let id: UUID
+    let walletID: UUID
+    let eventType: String
+    let direction: String
+    let assetSymbol: String?
+    let assetAmount: Double?
+    let estimatedValueEUR: Double?
+    let blockTime: String?
+    let explorerURL: String?
+
+    var eventLabel: String {
+        switch eventType {
+        case "swap": "Échange"
+        case "defi_deposit": "Dépôt DeFi"
+        case "defi_withdrawal": "Retrait DeFi"
+        case "transfer": "Transfert"
+        default: "Mouvement"
+        }
+    }
+}
+
+struct RealityComparison: Identifiable, Hashable {
+    let id: UUID
+    let simulatedValueEUR: Double
+    let realMarketValueEUR: Double
+    let networkFeesEUR: Double
+    let slippageEUR: Double
+    let comparedAt: String
+
+    var deltaEUR: Double { realMarketValueEUR - simulatedValueEUR - networkFeesEUR - slippageEUR }
+}
+
 enum AppTab: String, CaseIterable {
     case wealth, play, invest, learn, profile
 
