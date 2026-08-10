@@ -10,7 +10,7 @@ struct RootView: View {
         ZStack {
             Color.konsensBackground.ignoresSafeArea()
             if store.isLoading {
-                ProgressView().tint(.konsensGreen)
+                ProgressView().tint(Color.konsensGreen)
             } else if !store.isAuthenticated {
                 AuthView()
             } else if !store.onboardingComplete {
@@ -92,11 +92,11 @@ private struct FloatingHeader: View {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(store.subscriptionTier == "premium" ? "PREMIUM" : "PATRIMOINE")
                         .font(.system(size: 7, weight: .bold)).tracking(1)
-                        .foregroundStyle(.konsensMuted)
+                        .foregroundStyle(Color.konsensMuted)
                     HStack(spacing: 5) {
                         Text(store.wealth.total.formatted(.number.precision(.fractionLength(0))))
                             .font(.subheadline.monospacedDigit().bold())
-                        Text("Koins").font(.system(size: 8)).foregroundStyle(.konsensMuted)
+                        Text("Koins").font(.system(size: 8)).foregroundStyle(Color.konsensMuted)
                         Text(String(format: "%+.1f%%", store.wealth.performance))
                             .font(.system(size: 8, weight: .bold))
                             .foregroundStyle(store.wealth.performance >= 0 ? Color.konsensPositive : Color.konsensNegative)
@@ -130,7 +130,7 @@ private struct FloatingDock: View {
         .padding(5)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.white.opacity(0.08)))
-        .shadow(color: .black.opacity(0.35), radius: 26, y: 14)
+        .shadow(color: Color.black.opacity(0.35), radius: 26, y: 14)
     }
 }
 
@@ -139,10 +139,10 @@ private struct LockedView: View {
     var body: some View {
         VStack(spacing: 18) {
             KonsensMark()
-            Image(systemName: "faceid").font(.system(size: 52)).foregroundStyle(.konsensGreen)
+            Image(systemName: "faceid").font(.system(size: 52)).foregroundStyle(Color.konsensGreen)
             Text("Ton patrimoine est verrouillé").font(.title2.bold())
             Text("Utilise Face ID pour retrouver tes Koins, tes investissements et tes prédictions.")
-                .multilineTextAlignment(.center).foregroundStyle(.konsensMuted).font(.subheadline)
+                .multilineTextAlignment(.center).foregroundStyle(Color.konsensMuted).font(.subheadline)
             Button("Déverrouiller avec Face ID", action: unlock)
                 .font(.headline).foregroundStyle(Color.konsensBackground)
                 .padding(.horizontal, 20).padding(.vertical, 13)
@@ -160,17 +160,17 @@ private struct LearningView: View {
                 Eyebrow(text: "KONSENS ACADEMY")
                 Text("Comprendre avant de risquer.").font(.largeTitle.bold())
                 Text("Des cours courts reliés aux décisions que tu prends dans ton portefeuille.")
-                    .font(.subheadline).foregroundStyle(.konsensMuted).padding(.bottom, 8)
+                    .font(.subheadline).foregroundStyle(Color.konsensMuted).padding(.bottom, 8)
                 ForEach(Array(store.lessons.enumerated()), id: \.element.id) { index, lesson in
                     Button { selected = lesson } label: {
                         HStack(spacing: 14) {
                             Text(String(format: "%02d", index + 1)).font(.title2.monospacedDigit().bold()).foregroundStyle(Color.konsensGreen.opacity(0.5))
                             VStack(alignment: .leading, spacing: 5) {
-                                Text("+\(lesson.xpReward) XP · 5 MIN").font(.system(size: 8, weight: .bold)).foregroundStyle(.konsensGreen)
+                                Text("+\(lesson.xpReward) XP · 5 MIN").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.konsensGreen)
                                 Text(lesson.title).font(.headline)
-                                Text(lesson.summary).font(.caption).foregroundStyle(.konsensMuted).lineLimit(2)
+                                Text(lesson.summary).font(.caption).foregroundStyle(Color.konsensMuted).lineLimit(2)
                             }
-                            Spacer(); Image(systemName: "chevron.right").foregroundStyle(.konsensGreen)
+                            Spacer(); Image(systemName: "chevron.right").foregroundStyle(Color.konsensGreen)
                         }.panel()
                     }.buttonStyle(.plain)
                 }
@@ -181,7 +181,7 @@ private struct LearningView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     Eyebrow(text: "COURS · +\(lesson.xpReward) XP")
                     Text(lesson.title).font(.largeTitle.bold())
-                    Text(lesson.summary).foregroundStyle(.konsensMuted)
+                    Text(lesson.summary).foregroundStyle(Color.konsensMuted)
                     Text(lesson.concept).font(.body).lineSpacing(5).padding().background(Color.konsensPanel, in: RoundedRectangle(cornerRadius: 18))
                     Button("J’ai compris") { selected = nil }
                         .font(.headline).foregroundStyle(Color.konsensBackground).frame(maxWidth: .infinity).padding(14)
