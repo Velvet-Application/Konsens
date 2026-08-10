@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-type Tab = "home" | "play" | "learn" | "invest" | "league";
+type Tab = "home" | "play" | "learn" | "invest" | "league" | "premium";
 type Choice = "etf" | "stock" | "prediction";
 
 const options = {
@@ -31,7 +31,7 @@ export default function KonsensApp() {
   return <main className="k-app">
     <header className="k-header">
       <button className="k-logo" onClick={()=>setTab("home")}><span>K</span><b>Konsens</b></button>
-      <nav><Nav active={tab==="home"} label="Accueil" onClick={()=>setTab("home")}/><Nav active={tab==="play"} label="Jouer" onClick={()=>setTab("play")}/><Nav active={tab==="learn"} label="Apprendre" onClick={()=>setTab("learn")}/><Nav active={tab==="invest"} label="Investir" onClick={()=>setTab("invest")}/><Nav active={tab==="league"} label="Ligue" onClick={()=>setTab("league")}/></nav>
+      <nav><Nav active={tab==="home"} label="Accueil" onClick={()=>setTab("home")}/><Nav active={tab==="play"} label="Jouer" onClick={()=>setTab("play")}/><Nav active={tab==="learn"} label="Apprendre" onClick={()=>setTab("learn")}/><Nav active={tab==="invest"} label="Investir" onClick={()=>setTab("invest")}/><Nav active={tab==="league"} label="Ligue" onClick={()=>setTab("league")}/><Nav active={tab==="premium"} label="Premium ✦" onClick={()=>setTab("premium")}/></nav>
       <button className="profile-pill"><span>CG</span><b>{xp} XP</b></button>
     </header>
 
@@ -41,9 +41,10 @@ export default function KonsensApp() {
       {tab==="learn"&&<Learn amount={amount} setAmount={setAmount} choice={choice} setChoice={setChoice} months={months} setMonths={setMonths}/>} 
       {tab==="invest"&&<Invest balance={balance} amount={amount} setAmount={setAmount} choice={choice} setChoice={setChoice} months={months} setMonths={setMonths} invest={invest}/>} 
       {tab==="league"&&<League/>}
+      {tab==="premium"&&<Premium notify={notify}/>} 
     </section>
 
-    <nav className="k-mobile-nav"><MobileNav icon="⌂" active={tab==="home"} label="Accueil" onClick={()=>setTab("home")}/><MobileNav icon="⚡" active={tab==="play"} label="Jouer" onClick={()=>setTab("play")}/><MobileNav icon="◉" active={tab==="learn"} label="Apprendre" onClick={()=>setTab("learn")}/><MobileNav icon="↗" active={tab==="invest"} label="Investir" onClick={()=>setTab("invest")}/><MobileNav icon="♛" active={tab==="league"} label="Ligue" onClick={()=>setTab("league")}/></nav>
+    <nav className="k-mobile-nav"><MobileNav icon="⌂" active={tab==="home"} label="Accueil" onClick={()=>setTab("home")}/><MobileNav icon="⚡" active={tab==="play"} label="Jouer" onClick={()=>setTab("play")}/><MobileNav icon="◉" active={tab==="learn"} label="Apprendre" onClick={()=>setTab("learn")}/><MobileNav icon="↗" active={tab==="invest"} label="Investir" onClick={()=>setTab("invest")}/><MobileNav icon="✦" active={tab==="premium"||tab==="league"} label="Premium" onClick={()=>setTab("premium")}/></nav>
     {toast&&<div className="k-toast">✓ {toast}</div>}
   </main>;
 }
@@ -105,6 +106,22 @@ function Simulator({amount,setAmount,choice,setChoice,months,setMonths,compact=f
 }
 
 function League(){return <section className="league-simple"><header className="page-heading"><span>SAISON 1 · LIGUE DÉCOUVERTE</span><h1>Progresse avec les autres</h1><p>Le classement récompense la performance, mais aussi la régularité et la maîtrise du risque.</p></header><div className="rank-table"><header><span>Rang</span><span>Joueur</span><span>Patrimoine</span><span>Performance</span></header>{rankings.map(([rank,name,value,score])=><div className={name==="Cyril"?"you":""} key={name}><b>{rank}</b><span className="rank-avatar">{String(name).slice(0,1)}</span><strong>{name}{name==="Cyril"&&<small>TOI</small>}</strong><span>{Number(value).toLocaleString("fr-FR")} €</span><em>+{score}%</em></div>)}</div><aside className="league-tip"><span>🏆</span><div><strong>Comment gagner des places ?</strong><p>Diversifie tes placements, évite de tout miser sur une prédiction et reviens suivre tes décisions.</p></div></aside></section>}
+
+const whaleData=[
+  {rank:1,name:"Atlas 0x71…A9",trust:"Adresse publique vérifiée",asset:"ETH",move:"Achat",amount:"428 600 €",time:"il y a 8 min",score:92},
+  {rank:2,name:"Hexa DeFi 0x3C…18",trust:"Profil auto-déclaré vérifié",asset:"AAVE",move:"Dépôt DeFi",amount:"186 240 €",time:"il y a 41 min",score:86},
+  {rank:3,name:"Ledger 0xA2…F4",trust:"Adresse publique attribuée",asset:"BTC",move:"Transfert",amount:"94 810 €",time:"il y a 2 h",score:74},
+];
+
+function Premium({notify}:{notify:(s:string)=>void}){
+  const [following,setFollowing]=useState([true,false,false]);
+  const toggle=(i:number)=>setFollowing(v=>v.map((x,n)=>n===i?!x:x));
+  return <section className="premium-page"><header className="premium-hero"><div><span>KONSENS PREMIUM · BLOCKCHAIN LIVE</span><h1>Ta stratégie face<br/><em>au monde réel.</em></h1><p>Compare tes scénarios fictifs aux marchés publics et observe les mouvements des grands portefeuilles blockchain.</p><div><b>✦ 10 portefeuilles suivis</b><b>⚡ Alertes quasi temps réel</b><b>◎ Comparaison historique</b></div></div><aside><span>TON AVANTAGE PREMIUM</span><strong>+8,4 %</strong><p>Performance fictive si tes décisions avaient été exécutées sur le marché réel.</p><small>Hors frais, fiscalité et glissement de prix</small></aside></header>
+    <section className="reality-compare"><header><div><span>SIMULATION VS BLOCKCHAIN</span><h2>Et si tu l’avais vraiment fait ?</h2></div><select aria-label="Période"><option>30 derniers jours</option><option>Cette semaine</option><option>Cette année</option></select></header><div className="compare-stage"><article><span>TON SCÉNARIO KONSENS</span><strong>1 000 €</strong><p>Investis fictivement sur Ethereum</p><em>Valeur simulée aujourd’hui</em><b>1 084 €</b></article><div className="versus"><i>VS</i><span>Écart</span><b>+12 €</b></div><article className="real-chain"><span>MARCHÉ RÉEL</span><strong>1 000 €</strong><p>Prix blockchain horodaté</p><em>Valeur réelle théorique</em><b>1 072 €</b></article></div><div className="compare-explain"><i>i</i><p>La différence vient des frais réseau, du moment d’exécution et de la liquidité. Cette comparaison est pédagogique et ne constitue pas un conseil financier.</p></div></section>
+    <section className="whale-watch"><header><div><span>WHALE WATCH · 1/10 SUIVI</span><h2>Grands portefeuilles publics</h2><p>Classement fondé sur la valeur publique observable, pas sur la fortune totale d’une personne.</p></div><button onClick={()=>notify("Alerte test envoyée")}>Tester une alerte</button></header><div className="whale-table">{whaleData.map((w,i)=><article key={w.name}><b className="whale-rank">#{w.rank}</b><div className="whale-name"><i>{w.name.charAt(0)}</i><div><strong>{w.name}</strong><small>✓ {w.trust} · confiance {w.score}%</small></div></div><div className="whale-move"><span>{w.move}</span><strong>{w.asset}</strong><small>{w.time}</small></div><div className="whale-amount"><span>MONTANT ESTIMÉ</span><strong>{w.amount}</strong></div><button className={following[i]?"following":""} onClick={()=>{toggle(i);notify(following[i]?"Suivi arrêté":"Portefeuille suivi · alertes activées")}}>{following[i]?"✓ Suivi":"+ Suivre"}</button></article>)}</div></section>
+    <section className="alert-preview"><div className="phone-alert"><span>maintenant</span><i>✦</i><div><strong>Konsens · Whale Watch</strong><p>Atlas vient d’échanger environ 428 600 € d’USDC contre ETH.</p><small>Voir la transaction publique →</small></div></div><div><span>ALERTES INTELLIGENTES</span><h2>Un mouvement, pas un ordre à copier.</h2><p>Konsens analyse l’événement public, estime sa valeur en euros et explique ce qu’il peut signifier. Tu décides ensuite de simuler, d’observer ou de ne rien faire.</p><ul><li>Notification à partir d’un montant choisi</li><li>Lien vers la transaction blockchain</li><li>Détection transfert / swap / dépôt DeFi</li><li>Identité affichée seulement si vérifiée</li></ul></div></section>
+  </section>
+}
 
 function calculate(amount:number,choice:Choice,months:number){if(choice==="prediction"){const price=.63;const units=amount/price;const gain=units-amount;return{gain,value:units,formula:`${amount.toLocaleString("fr-FR")} ÷ 0,63 − mise`}}const annual=options[choice].rate/100;const gain=amount*annual*(months/12);return{gain,value:amount+gain,formula:`${amount.toLocaleString("fr-FR")} × ${options[choice].rate}% × ${months}/12`}}
 function Concept({icon,title,text}:{icon:string;title:string;text:string}){return <article><i>{icon}</i><strong>{title}</strong><p>{text}</p></article>}
