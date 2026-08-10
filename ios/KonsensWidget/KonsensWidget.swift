@@ -26,7 +26,9 @@ struct KonsensWealthWidgetView: View {
             HStack {
                 ZStack {
                     RoundedRectangle(cornerRadius: 9).fill(Color(red: 0.05, green: 0.12, blue: 0.16))
-                    Text("K").font(.headline.black().italic()).foregroundStyle(LinearGradient(colors: [.mint, .blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    Text("K")
+                        .font(.system(size: 17, weight: .black, design: .rounded).italic())
+                        .foregroundStyle(LinearGradient(colors: [.mint, .blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
                 }.frame(width: 31, height: 31)
                 Spacer()
                 Image(systemName: "chart.line.uptrend.xyaxis").font(.caption).foregroundStyle(.mint)
