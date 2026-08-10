@@ -1,0 +1,42 @@
+name: Repair lockfile and script modes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/repair-lockfile.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Regenerate package lock
+        run: |
+          rm -f package-lock.json
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          node -e "JSON.parse(require('fs').readFileSync('package-lock.json','utf8')); console.log('package-lock.json valid JSON')"
+      - name: Validate clean install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Fix script executable modes
+        run: |
+          chmod +x scripts/*.sh
+          git update-index --chmod=+x scripts/*.sh
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json scripts/*.sh
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+            exit 0
+          fi
+          git commit -m "Repair npm lockfile and script permissions"
+          git push origin HEAD:main
