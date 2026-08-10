@@ -21,9 +21,12 @@ export default function KonsensApp() {
   const [months, setMonths] = useState(12);
   const [toast, setToast] = useState("");
   const [xp, setXp] = useState(680);
+  const [invested, setInvested] = useState(3200);
+  const [weeklyClaimed, setWeeklyClaimed] = useState(false);
   const notify = (value:string) => { setToast(value); window.setTimeout(()=>setToast(""),2200); };
-  const invest = () => { if(amount>balance)return notify("Montant supérieur à ton solde");setBalance(v=>v-amount);notify(`${amount.toLocaleString("fr-FR")} € virtuels placés`); };
+  const invest = () => { if(amount>balance)return notify("Montant supérieur à ton solde");setBalance(v=>v-amount);setInvested(v=>v+amount);notify(`${amount.toLocaleString("fr-FR")} € virtuels placés`); };
   const play = (stake:number, payout:number) => { if(stake>balance)return notify("Mise supérieure à ton solde");setBalance(v=>v-stake);setXp(v=>v+30);notify(`Prédiction enregistrée · gain possible ${payout.toFixed(0)} €`); };
+  const claimWeekly = () => { if(weeklyClaimed)return notify("Dotation déjà reçue cette semaine");setBalance(v=>v+1000);setWeeklyClaimed(true);setXp(v=>v+40);notify("1 000 € virtuels reçus · +40 XP"); };
 
   return <main className="k-app">
     <header className="k-header">
@@ -33,7 +36,7 @@ export default function KonsensApp() {
     </header>
 
     <section className="k-content">
-      {tab==="home"&&<Home balance={balance} goLearn={()=>setTab("learn")} goInvest={()=>setTab("invest")} goPlay={()=>setTab("play")}/>} 
+      {tab==="home"&&<Home balance={balance} invested={invested} claimed={weeklyClaimed} claimWeekly={claimWeekly} goLearn={()=>setTab("learn")} goInvest={()=>setTab("invest")} goPlay={()=>setTab("play")}/>} 
       {tab==="play"&&<Play balance={balance} xp={xp} onPlay={play}/>} 
       {tab==="learn"&&<Learn amount={amount} setAmount={setAmount} choice={choice} setChoice={setChoice} months={months} setMonths={setMonths}/>} 
       {tab==="invest"&&<Invest balance={balance} amount={amount} setAmount={setAmount} choice={choice} setChoice={setChoice} months={months} setMonths={setMonths} invest={invest}/>} 
@@ -45,10 +48,16 @@ export default function KonsensApp() {
   </main>;
 }
 
-function Home({balance,goLearn,goInvest,goPlay}:{balance:number;goLearn:()=>void;goInvest:()=>void;goPlay:()=>void}){
+function Home({balance,invested,claimed,claimWeekly,goLearn,goInvest,goPlay}:{balance:number;invested:number;claimed:boolean;claimWeekly:()=>void;goLearn:()=>void;goInvest:()=>void;goPlay:()=>void}){
+  const annualInflation=.035;
+  const weeklyInflation=Math.pow(1+annualInflation,1/52)-1;
+  const weeklyLoss=balance*weeklyInflation;
+  const purchasingPower=balance-weeklyLoss;
   return <>
     <section className="welcome-row"><div><span className="hello">Bonjour Cyril 👋</span><h1>Fais grandir ton argent.<br/><em>Sans risquer le tien.</em></h1><p>Konsens reproduit la vraie vie financière avec de l’argent 100 % virtuel.</p></div><div className="level-ring"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42"/><circle className="progress" cx="50" cy="50" r="42"/></svg><strong>65%</strong><small>NIVEAU 3</small></div></section>
-    <section className="money-panel"><div><span>MON ARGENT VIRTUEL</span><strong>{balance.toLocaleString("fr-FR")} €</strong><small>1 € virtuel = 1 € dans la simulation</small></div><button onClick={goInvest}>Faire travailler mon argent <b>→</b></button></section>
+    <section className="weekly-income"><div className="income-copy"><span>TA SEMAINE FINANCIÈRE · J3/7</span><h2>{claimed?"Dotation reçue":"1 000 € t’attendent"}</h2><p>Connecte-toi au moins 3 jours dans la semaine pour recevoir ton revenu virtuel.</p><div className="activity-days">{["L","M","M","J","V","S","D"].map((d,i)=><i className={i<3?"done":""} key={i}>{i<3?"✓":d}</i>)}</div></div><button disabled={claimed} onClick={claimWeekly}>{claimed?"Reçue cette semaine ✓":"Recevoir mes 1 000 €"}</button></section>
+    <section className="money-panel"><div><span>MON ARGENT DISPONIBLE</span><strong>{balance.toLocaleString("fr-FR")} €</strong><small>1 € virtuel = 1 € dans la simulation</small></div><button onClick={goInvest}>Faire travailler mon argent <b>→</b></button></section>
+    <section className="money-choice"><header><div><span>CHAQUE EURO A UN DESTIN</span><h2>Que fais-tu de ton argent cette semaine ?</h2></div><small>Patrimoine total : <b>{(balance+invested).toLocaleString("fr-FR")} €</b></small></header><div className="choice-cards"><button className="cash-choice"><i>€</i><span>GARDER EN CASH</span><strong>{balance.toLocaleString("fr-FR")} €</strong><p>Sans action, l’inflation réduit ton pouvoir d’achat.</p><em>−{weeklyLoss.toFixed(2).replace(".",",")} € cette semaine</em><small>Pouvoir d’achat après inflation : {purchasingPower.toFixed(2).replace(".",",")} €</small></button><button className="invest-choice" onClick={goInvest}><i>↗</i><span>INVESTIR</span><strong>{invested.toLocaleString("fr-FR")} €</strong><p>ETF et actions : ton capital évolue avec le vrai marché.</p><em>Potentiel progressif · risque variable</em><small>Tu restes propriétaire de ton placement.</small></button><button className="bet-choice" onClick={goPlay}><i>⚡</i><span>MISER</span><strong>Choisir une somme</strong><p>Prédictions : résultat rapide, gain ou perte de la mise.</p><em>Potentiel élevé · perte jusqu’à 100 %</em><small>Le résultat dépend d’un événement précis.</small></button></div><div className="inflation-line"><i>!</i><p><strong>L’inflation ne retire pas des euros de ton compte.</strong> Avec une référence annuelle de 3,5 %, l’érosion équivaut ici à {(weeklyInflation*100).toFixed(3).replace(".",",")} % par semaine. Elle diminue ce que tes euros permettent réellement d’acheter.</p></div></section>
     <section className="play-callout"><div><span>DÉFI EXPRESS · FIN DANS 4 H</span><h2>Le CAC 40 finira-t-il dans le vert ?</h2><p>Lis l’indice, fais ton choix et vois immédiatement ce que ta mise virtuelle peut rapporter.</p></div><button onClick={goPlay}>Jouer la prédiction <b>→</b></button></section>
     <section className="daily-lesson"><div className="lesson-badge">3 min</div><div className="lesson-copy"><span>MISSION DU JOUR · +50 XP</span><h2>Un ETF, c’est quoi exactement ?</h2><p>Découvre comment investir dans des centaines d’entreprises en un seul achat.</p><button onClick={goLearn}>Commencer la mission</button></div><div className="basket-visual"><div className="basket"><i>A</i><i></i><i>N</i><i>V</i></div><span>1 ETF</span><small>= un panier d’entreprises</small></div></section>
     <section className="dashboard-row"><div className="journey"><header><div><span>TON PARCOURS</span><h2>Apprenti investisseur</h2></div><b>2/5 notions</b></header><div className="journey-line"><i className="done">✓<small>Budget</small></i><span/><i className="done">✓<small>Risque</small></i><span/><i className="current">3<small>ETF</small></i><span/><i>4<small>Actions</small></i><span/><i>5<small>Prédire</small></i></div></div><div className="mini-rank"><span>TA LIGUE</span><strong>#3</strong><p>Tu as gagné 2 places cette semaine</p><div><i style={{width:"72%"}}/></div></div></section>
