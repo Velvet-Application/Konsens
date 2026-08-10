@@ -13,19 +13,37 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - run: npm run lint
+      - name: Lint web
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee eslint.log
       - run: npm test
   ios:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Build iOS simulator
-        run: xcodebuild -project ios/Konsens.xcodeproj -scheme Konsens -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 16 Pro' CODE_SIGNING_ALLOWED=NO build
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/Konsens.xcodeproj -scheme Konsens -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build 2>&1 | tee xcodebuild.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            grep -E "(^|: )(error:|fatal error:)" xcodebuild.log | tail -40 | while IFS= read -r line; do echo "::error::$line"; done
+            exit "$status"
+          fi
   database:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Guard migrations
+      - name: Guard migrations and secrets
+        shell: bash
         run: |
+          set -euo pipefail
           test -f supabase/migrations/20260810090000_konsens_foundation.sql
-          ! grep -R "service_role\|sb_secret_" supabase cloudflare ios app
+          test -f supabase/migrations/20260810173000_finance_learning_wealth_v1.sql
+          if grep -R -n -E "sb_secret_[A-Za-z0-9_-]+|SUPABASE_SERVICE_ROLE_KEY[[:space:]]*=[[:space:]]*['\"]?[A-Za-z0-9]" supabase cloudflare ios app; then
+            echo "::error::A runtime Supabase secret appears to be committed."
+            exit 1
+          fi
