@@ -15,6 +15,9 @@ struct ArenaView: View {
                 }
                 WealthCard()
                 RiskCard()
+                if store.subscriptionTier == "free" {
+                    SponsoredCard()
+                }
                 HStack(spacing: 10) {
                     Shortcut(title: "Jouer", detail: "Tester ton instinct", icon: "play.fill", tint: Color.konsensViolet) { store.selectedTab = .play }
                     Shortcut(title: "Investir", detail: "Bâtir ton portefeuille", icon: "chart.line.uptrend.xyaxis", tint: Color.konsensGreen) { store.selectedTab = .invest }
@@ -81,6 +84,85 @@ private struct RiskCard: View {
     }
 }
 
+private struct SponsoredCard: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.openURL) private var openURL
+    @State private var ad: SponsoredAd?
+    @State private var sessionID = UUID().uuidString
+    @State private var impressionTracked = false
+
+    var body: some View {
+        Group {
+            if let ad {
+                Button {
+                    Task { await track(ad, type: "click") }
+                    if let url = URL(string: ad.destinationURL) { openURL(url) }
+                } label: {
+                    HStack(spacing: 13) {
+                        Image(systemName: "sparkles.rectangle.stack.fill")
+                            .font(.title3).foregroundStyle(Color.konsensGold)
+                            .frame(width: 44, height: 44)
+                            .background(Color.konsensGold.opacity(0.1), in: RoundedRectangle(cornerRadius: 13))
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 5) {
+                                Text(ad.eyebrow.uppercased()).font(.system(size: 7, weight: .bold)).tracking(1)
+                                Text("· \(ad.sponsorName)").font(.system(size: 7, weight: .bold))
+                            }.foregroundStyle(Color.konsensGold)
+                            Text(ad.headline).font(.subheadline.bold()).multilineTextAlignment(.leading)
+                            if let body = ad.body {
+                                Text(body).font(.system(size: 9)).foregroundStyle(Color.konsensMuted).lineLimit(2)
+                            }
+                        }
+                        Spacer()
+                        Image(systemName: "arrow.up.right").foregroundStyle(Color.konsensGold)
+                    }
+                    .padding(16)
+                    .background(LinearGradient(colors: [Color.konsensGold.opacity(0.08), Color.konsensPanel], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 19))
+                    .overlay(RoundedRectangle(cornerRadius: 19).stroke(Color.konsensGold.opacity(0.14)))
+                }.buttonStyle(.plain)
+            }
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        struct Params: Encodable { let p_placement: String; let p_session_id: String }
+        struct Row: Decodable {
+            let campaign_id: UUID
+            let creative_id: UUID
+            let sponsor_name: String
+            let eyebrow: String
+            let headline: String
+            let body: String?
+            let cta_label: String
+            let destination_url: String
+            let placement: String
+        }
+        let params = Params(p_placement: "feed_native", p_session_id: sessionID)
+        if let rows: [Row] = try? await store.supabase.rpc("get_active_ad", params: params).execute().value,
+           let row = rows.first {
+            let loaded = SponsoredAd(campaignID: row.campaign_id, id: row.creative_id, sponsorName: row.sponsor_name, eyebrow: row.eyebrow, headline: row.headline, body: row.body, ctaLabel: row.cta_label, destinationURL: row.destination_url, placement: row.placement)
+            ad = loaded
+            if !impressionTracked {
+                impressionTracked = true
+                await track(loaded, type: "impression")
+            }
+        }
+    }
+
+    private func track(_ ad: SponsoredAd, type: String) async {
+        struct Params: Encodable {
+            let p_campaign_id: UUID
+            let p_creative_id: UUID
+            let p_event_type: String
+            let p_placement: String
+            let p_session_id: String
+        }
+        let params = Params(p_campaign_id: ad.campaignID, p_creative_id: ad.id, p_event_type: type, p_placement: ad.placement, p_session_id: sessionID)
+        _ = try? await store.supabase.rpc("track_ad_event", params: params).execute()
+    }
+}
+
 private struct Shortcut: View {
     let title: String; let detail: String; let icon: String; let tint: Color; let action: () -> Void
     var body: some View {
@@ -102,7 +184,7 @@ private struct PremiumCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Eyebrow(text: "KONSENS PREMIUM")
                 Text(store.subscriptionTier == "premium" ? "Premium actif" : "4,99 € / mois").font(.headline)
-                Text("Sans pub · prédictif · détails des portefeuilles · futurs flux financiers API").font(.system(size: 9)).foregroundStyle(Color.konsensMuted)
+                Text("Sans pub · prédictif · détails des portefeuilles · flux financiers API et suivi blockchain").font(.system(size: 9)).foregroundStyle(Color.konsensMuted)
             }
             Spacer()
         }.padding(18).background(LinearGradient(colors: [Color.konsensViolet.opacity(0.12), Color.konsensPanel], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20)).overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.konsensViolet.opacity(0.2)))
