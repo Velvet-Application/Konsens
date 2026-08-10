@@ -119,18 +119,15 @@ const worker = {
       const apiKey = request.headers.get("x-konsens-key");
       const origin = request.headers.get("origin") || "server";
       if (!apiKey) return json({ error: "missing_api_key" }, 401, cors);
-      const meter = await supabaseRpc(request, env, "register_sdk_event", {
+      const signal = await supabaseRpc(request, env, "get_sdk_challenge_signal", {
         p_api_key: apiKey,
-        p_event_type: "signal_read",
         p_origin: origin,
-        p_metadata: { challengeId: signalMatch[1] },
+        p_challenge_id: signalMatch[1],
       });
-      if (!meter.ok) return json({ error: "sdk_access_denied", detail: meter.data }, 403, cors);
-      const signal = await supabaseRpc(request, env, "get_challenge_signal", { p_challenge_id: signalMatch[1] });
-      if (!signal.ok) return json({ error: "signal_unavailable", detail: signal.data }, signal.status, cors);
+      if (!signal.ok) return json({ error: "sdk_access_denied", detail: signal.data }, 403, cors);
       const data = Array.isArray(signal.data) ? signal.data[0] ?? null : signal.data;
       if (!data) return json({ error: "challenge_not_found" }, 404, cors);
-      return json({ signal: data, usage: Array.isArray(meter.data) ? meter.data[0] ?? null : meter.data }, 200, { ...cors, "cache-control": "private, max-age=20" });
+      return json({ signal: data, usage: { plan: data.client_plan, remainingEvents: data.remaining_events } }, 200, { ...cors, "cache-control": "private, max-age=20" });
     }
 
     if (url.pathname === "/v1/sdk/events" && request.method === "POST") {
