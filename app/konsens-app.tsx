@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-type Tab = "home" | "learn" | "invest" | "league";
+type Tab = "home" | "play" | "learn" | "invest" | "league";
 type Choice = "etf" | "stock" | "prediction";
 
 const options = {
@@ -20,36 +20,58 @@ export default function KonsensApp() {
   const [choice, setChoice] = useState<Choice>("etf");
   const [months, setMonths] = useState(12);
   const [toast, setToast] = useState("");
+  const [xp, setXp] = useState(680);
   const notify = (value:string) => { setToast(value); window.setTimeout(()=>setToast(""),2200); };
   const invest = () => { if(amount>balance)return notify("Montant supérieur à ton solde");setBalance(v=>v-amount);notify(`${amount.toLocaleString("fr-FR")} € virtuels placés`); };
+  const play = (stake:number, payout:number) => { if(stake>balance)return notify("Mise supérieure à ton solde");setBalance(v=>v-stake);setXp(v=>v+30);notify(`Prédiction enregistrée · gain possible ${payout.toFixed(0)} €`); };
 
   return <main className="k-app">
     <header className="k-header">
       <button className="k-logo" onClick={()=>setTab("home")}><span>K</span><b>Konsens</b></button>
-      <nav><Nav active={tab==="home"} label="Accueil" onClick={()=>setTab("home")}/><Nav active={tab==="learn"} label="Apprendre" onClick={()=>setTab("learn")}/><Nav active={tab==="invest"} label="Investir" onClick={()=>setTab("invest")}/><Nav active={tab==="league"} label="Classement" onClick={()=>setTab("league")}/></nav>
-      <button className="profile-pill"><span>CG</span><b>Niv. 3</b></button>
+      <nav><Nav active={tab==="home"} label="Accueil" onClick={()=>setTab("home")}/><Nav active={tab==="play"} label="Jouer" onClick={()=>setTab("play")}/><Nav active={tab==="learn"} label="Apprendre" onClick={()=>setTab("learn")}/><Nav active={tab==="invest"} label="Investir" onClick={()=>setTab("invest")}/><Nav active={tab==="league"} label="Ligue" onClick={()=>setTab("league")}/></nav>
+      <button className="profile-pill"><span>CG</span><b>{xp} XP</b></button>
     </header>
 
     <section className="k-content">
-      {tab==="home"&&<Home balance={balance} goLearn={()=>setTab("learn")} goInvest={()=>setTab("invest")}/>} 
+      {tab==="home"&&<Home balance={balance} goLearn={()=>setTab("learn")} goInvest={()=>setTab("invest")} goPlay={()=>setTab("play")}/>} 
+      {tab==="play"&&<Play balance={balance} xp={xp} onPlay={play}/>} 
       {tab==="learn"&&<Learn amount={amount} setAmount={setAmount} choice={choice} setChoice={setChoice} months={months} setMonths={setMonths}/>} 
       {tab==="invest"&&<Invest balance={balance} amount={amount} setAmount={setAmount} choice={choice} setChoice={setChoice} months={months} setMonths={setMonths} invest={invest}/>} 
       {tab==="league"&&<League/>}
     </section>
 
-    <nav className="k-mobile-nav"><MobileNav icon="⌂" active={tab==="home"} label="Accueil" onClick={()=>setTab("home")}/><MobileNav icon="◉" active={tab==="learn"} label="Apprendre" onClick={()=>setTab("learn")}/><MobileNav icon="↗" active={tab==="invest"} label="Investir" onClick={()=>setTab("invest")}/><MobileNav icon="♛" active={tab==="league"} label="Classement" onClick={()=>setTab("league")}/></nav>
+    <nav className="k-mobile-nav"><MobileNav icon="⌂" active={tab==="home"} label="Accueil" onClick={()=>setTab("home")}/><MobileNav icon="⚡" active={tab==="play"} label="Jouer" onClick={()=>setTab("play")}/><MobileNav icon="◉" active={tab==="learn"} label="Apprendre" onClick={()=>setTab("learn")}/><MobileNav icon="↗" active={tab==="invest"} label="Investir" onClick={()=>setTab("invest")}/><MobileNav icon="♛" active={tab==="league"} label="Ligue" onClick={()=>setTab("league")}/></nav>
     {toast&&<div className="k-toast">✓ {toast}</div>}
   </main>;
 }
 
-function Home({balance,goLearn,goInvest}:{balance:number;goLearn:()=>void;goInvest:()=>void}){
+function Home({balance,goLearn,goInvest,goPlay}:{balance:number;goLearn:()=>void;goInvest:()=>void;goPlay:()=>void}){
   return <>
     <section className="welcome-row"><div><span className="hello">Bonjour Cyril 👋</span><h1>Fais grandir ton argent.<br/><em>Sans risquer le tien.</em></h1><p>Konsens reproduit la vraie vie financière avec de l’argent 100 % virtuel.</p></div><div className="level-ring"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42"/><circle className="progress" cx="50" cy="50" r="42"/></svg><strong>65%</strong><small>NIVEAU 3</small></div></section>
     <section className="money-panel"><div><span>MON ARGENT VIRTUEL</span><strong>{balance.toLocaleString("fr-FR")} €</strong><small>1 € virtuel = 1 € dans la simulation</small></div><button onClick={goInvest}>Faire travailler mon argent <b>→</b></button></section>
+    <section className="play-callout"><div><span>DÉFI EXPRESS · FIN DANS 4 H</span><h2>Le CAC 40 finira-t-il dans le vert ?</h2><p>Lis l’indice, fais ton choix et vois immédiatement ce que ta mise virtuelle peut rapporter.</p></div><button onClick={goPlay}>Jouer la prédiction <b>→</b></button></section>
     <section className="daily-lesson"><div className="lesson-badge">3 min</div><div className="lesson-copy"><span>MISSION DU JOUR · +50 XP</span><h2>Un ETF, c’est quoi exactement ?</h2><p>Découvre comment investir dans des centaines d’entreprises en un seul achat.</p><button onClick={goLearn}>Commencer la mission</button></div><div className="basket-visual"><div className="basket"><i>A</i><i></i><i>N</i><i>V</i></div><span>1 ETF</span><small>= un panier d’entreprises</small></div></section>
     <section className="dashboard-row"><div className="journey"><header><div><span>TON PARCOURS</span><h2>Apprenti investisseur</h2></div><b>2/5 notions</b></header><div className="journey-line"><i className="done">✓<small>Budget</small></i><span/><i className="done">✓<small>Risque</small></i><span/><i className="current">3<small>ETF</small></i><span/><i>4<small>Actions</small></i><span/><i>5<small>Prédire</small></i></div></div><div className="mini-rank"><span>TA LIGUE</span><strong>#3</strong><p>Tu as gagné 2 places cette semaine</p><div><i style={{width:"72%"}}/></div></div></section>
   </>;
 }
+
+function Play({balance,xp,onPlay}:{balance:number;xp:number;onPlay:(stake:number,payout:number)=>void}){
+  const [side,setSide]=useState<"yes"|"no">("yes");
+  const [stake,setStake]=useState(100);
+  const price=side==="yes"?.63:.37;
+  const payout=stake/price;
+  const profit=payout-stake;
+  return <section className="play-page">
+    <header className="game-head"><div><span>ARÈNE · SAISON 1</span><h1>Lis le monde.<br/><em>Prends position.</em></h1><p>Des prédictions courtes, inspirées du vrai marché. Ici, tu apprends en décidant.</p></div><div className="streak-card"><b>🔥 6 jours</b><span>SÉRIE EN COURS</span><small>{xp} XP · prochain palier à 750</small><i><u style={{width:`${Math.min(100,(xp/750)*100)}%`}}/></i></div></header>
+    <div className="arena-grid"><article className="featured-market"><header><span className="live-dot">● OUVERT</span><small>ÉCONOMIE · FIN DANS 4 H 12</small></header><div className="market-title"><i>40</i><div><span>PRÉDICTION DU JOUR · +30 XP</span><h2>Le CAC 40 clôturera-t-il en hausse aujourd’hui ?</h2><p>Référence : clôture officielle d’Euronext Paris.</p></div></div><div className="market-context"><span>À comprendre</span><p>Le CAC 40 monte si la valeur cumulée des 40 grandes entreprises françaises progresse sur la journée.</p></div><div className="sides"><button className={side==="yes"?"yes active":"yes"} onClick={()=>setSide("yes")}><span>OUI</span><strong>63 %</strong><small>Le marché pense que oui</small></button><button className={side==="no"?"no active":"no"} onClick={()=>setSide("no")}><span>NON</span><strong>37 %</strong><small>Le marché pense que non</small></button></div></article>
+      <aside className="bet-slip"><span>TON TICKET</span><h2>Tu joues « {side==="yes"?"Oui":"Non"} »</h2><label>Mise virtuelle<strong>{stake} €</strong><input aria-label="Mise virtuelle" type="range" min="25" max="500" step="25" value={stake} onChange={e=>setStake(Number(e.target.value))}/></label><div className="stake-pills">{[50,100,250].map(n=><button className={stake===n?"active":""} key={n} onClick={()=>setStake(n)}>{n} €</button>)}</div><div className="ticket-math"><p><span>Tu mises</span><b>{stake} €</b></p><p><span>Tu peux recevoir</span><b>{payout.toFixed(0)} €</b></p><p className="ticket-profit"><span>Gain net possible</span><b>+{profit.toFixed(0)} €</b></p><p><span>Perte maximale</span><b>−{stake} €</b></p></div><small className="formula">Calcul : {stake} € ÷ {price.toFixed(2).replace(".",",")} = {payout.toFixed(0)} €</small>{stake>balance*.05&&<div className="risk-nudge">⚠ Cette mise dépasse 5 % de ton solde. Réduire le risque aide à durer.</div>}<button className="play-confirm" onClick={()=>onPlay(stake,payout)}>Valider ma prédiction</button><small className="virtual-only">Simulation uniquement · aucun argent réel</small></aside>
+    </div>
+    <section className="game-loop"><article><span>MISSION DU JOUR</span><h3>Joue 3 marchés différents</h3><div><i style={{width:"66%"}}/></div><p><b>2/3</b><strong>+80 XP</strong></p></article><article><span>DUEL AMICAL</span><h3>Mehdi t’a défié</h3><p>La BCE baissera-t-elle ses taux ?</p><button>Relever le duel →</button></article><article><span>PROCHAIN PALIER</span><h3>Coffre Analyste</h3><p>À 750 XP : badge, avatar et nouvelle ligue.</p><b className="xp-left">Plus que {Math.max(0,750-xp)} XP</b></article></section>
+    <section className="more-markets"><header><div><span>À TOI DE JOUER</span><h2>Autres prédictions</h2></div><button>Voir tout</button></header><div><MarketCard icon="€" topic="TAUX" title="La BCE baissera ses taux avant octobre ?" yes={71} time="2 j"/><MarketCard icon="A" topic="ENTREPRISE" title="Airbus dépassera son dernier sommet ?" yes={46} time="6 j"/><MarketCard icon="₿" topic="CRYPTO" title="Bitcoin restera au-dessus de son seuil ?" yes={58} time="18 h"/></div></section>
+  </section>
+}
+
+function MarketCard({icon,topic,title,yes,time}:{icon:string;topic:string;title:string;yes:number;time:string}){return <article className="market-card"><header><i>{icon}</i><span>{topic} · {time}</span></header><h3>{title}</h3><div><b style={{width:`${yes}%`}}/></div><p><strong>OUI {yes}%</strong><span>NON {100-yes}%</span></p><button>Analyser et jouer →</button></article>}
 
 function Learn({amount,setAmount,choice,setChoice,months,setMonths}:{amount:number;setAmount:(n:number)=>void;choice:Choice;setChoice:(c:Choice)=>void;months:number;setMonths:(n:number)=>void}){
   return <section className="learning-page">
