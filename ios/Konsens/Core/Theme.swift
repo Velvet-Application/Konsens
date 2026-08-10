@@ -44,20 +44,12 @@ struct KonsensMark: View {
     var compact = false
     var body: some View {
         HStack(spacing: 9) {
-            ZStack(alignment: .bottomTrailing) {
-                RoundedRectangle(cornerRadius: compact ? 10 : 13, style: .continuous)
-                    .fill(LinearGradient(colors: [.konsensPanelRaised, .black.opacity(0.45)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: compact ? 34 : 42, height: compact ? 34 : 42)
-                Text("K")
-                    .font(.system(size: compact ? 23 : 29, weight: .black, design: .rounded).italic())
-                    .foregroundStyle(LinearGradient(colors: [.konsensGreen, .konsensBlue, .konsensViolet], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: compact ? 34 : 42, height: compact ? 34 : 42)
-                HStack(alignment: .bottom, spacing: 2) {
-                    Capsule().fill(Color.konsensGreen).frame(width: 2.5, height: 7)
-                    Capsule().fill(Color.konsensBlue).frame(width: 2.5, height: 11)
-                    Capsule().fill(Color.konsensViolet).frame(width: 2.5, height: 15)
-                }.padding(.trailing, 4).padding(.bottom, 5)
-            }
+            Image("KonsensLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: compact ? 36 : 46, height: compact ? 36 : 46)
+                .clipShape(RoundedRectangle(cornerRadius: compact ? 10 : 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: compact ? 10 : 14, style: .continuous).stroke(Color.white.opacity(0.08)))
             if !compact {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Konsens").font(.headline.bold())
