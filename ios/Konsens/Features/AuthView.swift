@@ -18,7 +18,7 @@ struct AuthView: View {
                     .font(.system(size: 42, weight: .bold, design: .rounded))
                     .tracking(-1.6)
                 Text("Prédis, investis, apprends. Construis un patrimoine virtuel et découvre ce que tes décisions peuvent réellement coûter.")
-                    .foregroundStyle(.konsensMuted).font(.subheadline).lineSpacing(4)
+                    .foregroundStyle(Color.konsensMuted).font(.subheadline).lineSpacing(4)
                 HStack(spacing: 7) {
                     Proof(text: "0 € réel")
                     Proof(text: "Finance expliquée")
@@ -30,7 +30,7 @@ struct AuthView: View {
                     HStack { Rectangle().frame(height: 1); Text("OU").font(.system(size: 8)); Rectangle().frame(height: 1) }.foregroundStyle(Color.white.opacity(0.1))
                     TextField("Adresse mail", text: $email).textInputAutocapitalization(.never).keyboardType(.emailAddress).field()
                     SecureField("Mot de passe", text: $password).field()
-                    if !errorMessage.isEmpty { Text(errorMessage).font(.caption).foregroundStyle(.konsensNegative) }
+                    if !errorMessage.isEmpty { Text(errorMessage).font(.caption).foregroundStyle(Color.konsensNegative) }
                     Button(isSignup ? "Créer mon portefeuille" : "Me connecter") {
                         Task {
                             do {
@@ -40,10 +40,10 @@ struct AuthView: View {
                         }
                     }.buttonStyle(PrimaryButton())
                     Button(isSignup ? "J’ai déjà un compte" : "Créer un compte") { isSignup.toggle() }
-                        .font(.footnote.bold()).foregroundStyle(.konsensGreen)
+                        .font(.footnote.bold()).foregroundStyle(Color.konsensGreen)
                 }.padding(18).background(Color.konsensPanel, in: RoundedRectangle(cornerRadius: 22)).overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.white.opacity(0.07)))
                 Text("Les Koins sont une unité virtuelle sans valeur monétaire. Konsens ne permet aucun dépôt, retrait ou conversion en argent.")
-                    .font(.system(size: 8)).foregroundStyle(.konsensMuted).multilineTextAlignment(.center).frame(maxWidth: .infinity)
+                    .font(.system(size: 8)).foregroundStyle(Color.konsensMuted).multilineTextAlignment(.center).frame(maxWidth: .infinity)
             }.padding(24).frame(maxWidth: 520)
         }.background(Color.konsensBackground)
     }
@@ -63,7 +63,7 @@ struct NativeOnboardingView: View {
                 Spacer(minLength: 25)
                 Eyebrow(text: "TON POINT DE DÉPART")
                 Text("1 000 Koins.\nÀ toi de décider.").font(.largeTitle.bold())
-                Text("Conserve-les, investis-les ou engage-les dans des prédictions. Ton patrimoine suivra chaque choix.").foregroundStyle(.konsensMuted)
+                Text("Conserve-les, investis-les ou engage-les dans des prédictions. Ton patrimoine suivra chaque choix.").foregroundStyle(Color.konsensMuted)
                 TextField("Pseudo public", text: $username).field()
                 HStack { TextField("Prénom", text: $firstName).field(); TextField("Nom", text: $lastName).field() }
                 DatePicker("Date de naissance", selection: $birthDate, in: ...Calendar.current.date(byAdding: .year, value: -18, to: Date())!, displayedComponents: .date)
