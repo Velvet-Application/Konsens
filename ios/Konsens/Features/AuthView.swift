@@ -1,0 +1,17 @@
+import SwiftUI
+import Supabase
+
+struct AuthView:View{
+ @EnvironmentObject private var store:AppStore
+ @State private var email="";@State private var password="";@State private var isSignup=true;@State private var errorMessage=""
+ var body:some View{ScrollView{VStack(spacing:18){Text("K").font(.title.bold()).foregroundStyle(Color.konsensBackground).frame(width:54,height:54).background(Color.konsensGreen,in:RoundedRectangle(cornerRadius:16));Text("Konsens").font(.largeTitle.bold());Text("Et toi, tu paries sur quoi ?").font(.title2.bold()).multilineTextAlignment(.center);Text("Des crédits de jeu, jamais d’argent réel.").foregroundStyle(.konsensMuted);Button("Continuer avec Apple"){Task{try? await store.signIn(provider:.apple)}}.buttonStyle(AuthButton());Button("Continuer avec Google"){Task{try? await store.signIn(provider:.google)}}.buttonStyle(AuthButton());Divider().overlay(Color.white.opacity(.15));TextField("Adresse mail",text:$email).textInputAutocapitalization(.never).keyboardType(.emailAddress).field();SecureField("Mot de passe",text:$password).field();if !errorMessage.isEmpty{Text(errorMessage).font(.caption).foregroundStyle(.red)};Button(isSignup ? "Créer mon compte":"Me connecter"){Task{do{if isSignup{try await store.signUp(email:email,password:password)}else{try await store.signIn(email:email,password:password)}}catch{errorMessage=error.localizedDescription}}}.buttonStyle(PrimaryButton());Button(isSignup ? "J’ai déjà un compte":"Créer un compte"){isSignup.toggle()}.font(.footnote.bold()).foregroundStyle(.konsensGreen);Text("Réservé aux personnes majeures.").font(.caption2).foregroundStyle(.konsensMuted)}.padding(24).frame(maxWidth:480)}}
+}
+
+struct NativeOnboardingView:View{
+ @EnvironmentObject private var store:AppStore
+ @State private var username="";@State private var firstName="";@State private var lastName="";@State private var birthDate=Calendar.current.date(byAdding:.year,value:-18,to:Date())!
+ var body:some View{ScrollView{VStack(alignment:.leading,spacing:16){Text("TON PROFIL").font(.caption.bold()).foregroundStyle(.konsensGreen);Text("Comment doit-on t’appeler ?").font(.largeTitle.bold());Text("Seul ton pseudo sera public.").foregroundStyle(.konsensMuted);TextField("Pseudo",text:$username).field();HStack{TextField("Prénom",text:$firstName).field();TextField("Nom",text:$lastName).field()};DatePicker("Date de naissance",selection:$birthDate,in:...Calendar.current.date(byAdding:.year,value:-18,to:Date())!,displayedComponents:.date);Button("Entrer dans Konsens"){Task{try? await store.completeProfile(username:username,firstName:firstName,lastName:lastName,birthDate:birthDate)}}.buttonStyle(PrimaryButton()).disabled(username.count<3||firstName.isEmpty||lastName.isEmpty)}.padding(24)}}
+}
+private struct AuthButton:ButtonStyle{func makeBody(configuration:Configuration)->some View{configuration.label.frame(maxWidth:.infinity).padding(14).background(Color.konsensPanel,in:RoundedRectangle(cornerRadius:13)).opacity(configuration.isPressed ? .7:1)}}
+private struct PrimaryButton:ButtonStyle{func makeBody(configuration:Configuration)->some View{configuration.label.font(.headline).foregroundStyle(Color.konsensBackground).frame(maxWidth:.infinity).padding(15).background(Color.konsensGreen,in:RoundedRectangle(cornerRadius:13)).opacity(configuration.isPressed ? .7:1)}}
+private extension View{func field()->some View{padding().background(Color.konsensPanel,in:RoundedRectangle(cornerRadius:13))}}

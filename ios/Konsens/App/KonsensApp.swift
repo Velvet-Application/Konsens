@@ -8,7 +8,7 @@ struct KonsensApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(store)
-                .preferredColorScheme(.dark)
+                .onOpenURL { url in Task { try? await store.supabase.auth.session(from: url) } }
         }
     }
 }
