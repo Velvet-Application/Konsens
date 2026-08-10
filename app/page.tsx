@@ -1,6 +1,6 @@
-import KonsensApp from "./konsens-app";
+import FinanceShell from "./finance-shell";
 import MonetizationLayer from "./monetization-layer";
 
 export default function Home() {
-  return <MonetizationLayer><KonsensApp /></MonetizationLayer>;
+  return <MonetizationLayer><FinanceShell /></MonetizationLayer>;
 }
