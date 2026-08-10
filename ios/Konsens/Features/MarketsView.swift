@@ -47,7 +47,7 @@ private struct MarketCard: View {
             HStack { Text("Clôture \(shortDate(market.closesAt))").font(.caption2).foregroundStyle(Color.konsensMuted); Spacer(); Text("Mise \(amount) Koins").font(.caption2).foregroundStyle(Color.konsensMuted) }
             HStack(spacing: 9) {
                 Button { Task { await store.bet(market, outcome: "yes", amount: amount) } } label: { Text("OUI · \(amount)").frame(maxWidth: .infinity).padding(13).background(Color.konsensPositive.opacity(0.12), in: RoundedRectangle(cornerRadius: 13)).overlay(RoundedRectangle(cornerRadius: 13).stroke(Color.konsensPositive.opacity(0.22))) }.foregroundStyle(Color.konsensPositive)
-                Button { Task { await store.bet(market, outcome: "no", amount: amount) } label: { Text("NON · \(amount)").frame(maxWidth: .infinity).padding(13).background(Color.konsensNegative.opacity(0.11), in: RoundedRectangle(cornerRadius: 13)).overlay(RoundedRectangle(cornerRadius: 13).stroke(Color.konsensNegative.opacity(0.2))) }.foregroundStyle(Color.konsensNegative)
+                Button { Task { await store.bet(market, outcome: "no", amount: amount) } } label: { Text("NON · \(amount)").frame(maxWidth: .infinity).padding(13).background(Color.konsensNegative.opacity(0.11), in: RoundedRectangle(cornerRadius: 13)).overlay(RoundedRectangle(cornerRadius: 13).stroke(Color.konsensNegative.opacity(0.2))) }.foregroundStyle(Color.konsensNegative)
             }.font(.subheadline.bold())
         }.panel()
     }
