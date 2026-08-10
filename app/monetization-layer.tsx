@@ -110,7 +110,7 @@ export default function MonetizationLayer({ children }: { children: ReactNode })
     {children}
     {target && freeTier && ad ? createPortal(
       <aside className="k-sponsor-card" aria-label={`Contenu sponsorisé par ${ad.sponsor_name}`}>
-        {ad.image_url ? <img src={ad.image_url} alt="" /> : <div className="k-sponsor-mark">K</div>}
+        {ad.image_url ? <div className="k-sponsor-image" style={{ backgroundImage: `url(${JSON.stringify(ad.image_url)})` }} aria-hidden="true" /> : <div className="k-sponsor-mark">K</div>}
         <div className="k-sponsor-copy">
           <span>{ad.eyebrow} · {ad.sponsor_name}</span>
           <strong>{ad.headline}</strong>
