@@ -8,18 +8,20 @@
   "vars": {
     "ENVIRONMENT": "development",
     "DEMO_MODE": "true",
+    "MONETIZATION_MODE": "contextual",
     "SUPABASE_URL": "https://mxuevsspybxoovsutsbs.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_Xs7hyyDA2XUkbwXGGfSE2w_tARkgSL7",
     "ALLOWED_ORIGINS": "http://localhost:3000"
   },
   "triggers": { "crons": ["*/15 * * * *"] },
   "env": {
     "staging": {
       "name": "konsens-api-staging",
-      "vars": { "ENVIRONMENT": "staging", "DEMO_MODE": "false", "SUPABASE_URL": "https://mxuevsspybxoovsutsbs.supabase.co", "ALLOWED_ORIGINS": "https://konsens.cyril-62.chatgpt.site" }
+      "vars": { "ENVIRONMENT": "staging", "DEMO_MODE": "false", "MONETIZATION_MODE": "contextual", "SUPABASE_URL": "https://mxuevsspybxoovsutsbs.supabase.co", "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_Xs7hyyDA2XUkbwXGGfSE2w_tARkgSL7", "ALLOWED_ORIGINS": "https://konsens.cyril-62.chatgpt.site" }
     },
     "production": {
       "name": "konsens-api-production",
-      "vars": { "ENVIRONMENT": "production", "DEMO_MODE": "false", "SUPABASE_URL": "https://mxuevsspybxoovsutsbs.supabase.co", "ALLOWED_ORIGINS": "https://konsens.cyril-62.chatgpt.site" }
+      "vars": { "ENVIRONMENT": "production", "DEMO_MODE": "false", "MONETIZATION_MODE": "contextual", "SUPABASE_URL": "https://mxuevsspybxoovsutsbs.supabase.co", "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_Xs7hyyDA2XUkbwXGGfSE2w_tARkgSL7", "ALLOWED_ORIGINS": "https://konsens.cyril-62.chatgpt.site" }
     }
   }
 }
