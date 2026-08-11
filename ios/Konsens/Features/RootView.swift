@@ -49,7 +49,7 @@ struct RootView: View {
                 case .wealth: ArenaView()
                 case .play: MarketsView()
                 case .invest: LeagueView()
-                case .learn: LearningView()
+                case .learn: AcademyNativeView()
                 case .profile: ProfileView()
                 }
             }
@@ -148,46 +148,5 @@ private struct LockedView: View {
                 .padding(.horizontal, 20).padding(.vertical, 13)
                 .background(Color.konsensGreen, in: Capsule())
         }.padding(30)
-    }
-}
-
-private struct LearningView: View {
-    @EnvironmentObject private var store: AppStore
-    @State private var selected: LearningLesson?
-    var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
-                Eyebrow(text: "KONSENS ACADEMY")
-                Text("Comprendre avant de risquer.").font(.largeTitle.bold())
-                Text("Des cours courts reliés aux décisions que tu prends dans ton portefeuille.")
-                    .font(.subheadline).foregroundStyle(Color.konsensMuted).padding(.bottom, 8)
-                ForEach(Array(store.lessons.enumerated()), id: \.element.id) { index, lesson in
-                    Button { selected = lesson } label: {
-                        HStack(spacing: 14) {
-                            Text(String(format: "%02d", index + 1)).font(.title2.monospacedDigit().bold()).foregroundStyle(Color.konsensGreen.opacity(0.5))
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text("+\(lesson.xpReward) XP · 5 MIN").font(.system(size: 8, weight: .bold)).foregroundStyle(Color.konsensGreen)
-                                Text(lesson.title).font(.headline)
-                                Text(lesson.summary).font(.caption).foregroundStyle(Color.konsensMuted).lineLimit(2)
-                            }
-                            Spacer(); Image(systemName: "chevron.right").foregroundStyle(Color.konsensGreen)
-                        }.panel()
-                    }.buttonStyle(.plain)
-                }
-            }.padding(.horizontal, 18).padding(.top, 92).padding(.bottom, 110)
-        }
-        .sheet(item: $selected) { lesson in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    Eyebrow(text: "COURS · +\(lesson.xpReward) XP")
-                    Text(lesson.title).font(.largeTitle.bold())
-                    Text(lesson.summary).foregroundStyle(Color.konsensMuted)
-                    Text(lesson.concept).font(.body).lineSpacing(5).padding().background(Color.konsensPanel, in: RoundedRectangle(cornerRadius: 18))
-                    Button("J’ai compris") { selected = nil }
-                        .font(.headline).foregroundStyle(Color.konsensBackground).frame(maxWidth: .infinity).padding(14)
-                        .background(Color.konsensGreen, in: RoundedRectangle(cornerRadius: 15))
-                }.padding(24)
-            }.presentationDetents([.medium, .large]).presentationBackground(Color.konsensBackground)
-        }
     }
 }
