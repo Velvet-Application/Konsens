@@ -11,18 +11,31 @@ struct MarketsView: View {
     @State private var generating = false
 
     private var categories: [String] {
-        ["Tous"] + Array(Set(store.markets.map(\.category))).sorted()
+        ["Tous", "Suivis"] + Array(Set(store.markets.map(\.category))).sorted()
     }
 
     private var filteredMarkets: [Market] {
         store.markets
-            .filter { selectedCategory == "Tous" || $0.category == selectedCategory }
+            .filter { market in
+                if selectedCategory == "Tous" { return true }
+                if selectedCategory == "Suivis" { return store.watchedMarketIDs.contains(market.id) }
+                return market.category == selectedCategory
+            }
             .sorted { heat($0) > heat($1) }
     }
 
     private var featured: [Market] {
         let tagged = store.markets.filter { $0.tags.contains("featured") }
-        return Array((tagged.isEmpty ? store.markets : tagged).prefix(5))
+        let remaining = store.markets.filter { market in !tagged.contains(where: { $0.id == market.id }) }.sorted { heat($0) > heat($1) }
+        return Array((tagged + remaining).prefix(5))
+    }
+
+    private var moving: [Market] {
+        Array(store.markets.sorted {
+            let l = abs($0.movement24h) * 1000 + $0.volume24h
+            let r = abs($1.movement24h) * 1000 + $1.volume24h
+            return l > r
+        }.prefix(7))
     }
 
     var body: some View {
@@ -30,12 +43,16 @@ struct MarketsView: View {
             LazyVStack(alignment: .leading, spacing: 16) {
                 PlayHero(credits: store.credits, markets: store.markets)
 
+                if !moving.isEmpty || !store.playActivity.isEmpty {
+                    PlayPulseNative(markets: moving, activity: store.playActivity) { selectedMarket = $0 }
+                }
+
                 if !featured.isEmpty {
                     sectionTitle("À LA UNE", "Les marchés à surveiller")
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 10) {
                             ForEach(featured) { market in
-                                FeaturedPlayCard(market: market) { selectedMarket = market }
+                                FeaturedPlayCard(market: market, watched: store.watchedMarketIDs.contains(market.id), open: { selectedMarket = market }, watch: { Task { await store.toggleMarketWatch(market) } })
                             }
                         }
                     }
@@ -46,8 +63,11 @@ struct MarketsView: View {
                         ForEach(categories, id: \.self) { category in
                             Button { selectedCategory = category } label: {
                                 HStack(spacing: 6) {
-                                    Text(categoryIcon(category))
+                                    Text(category == "Suivis" ? "★" : categoryIcon(category))
                                     Text(category)
+                                    if category == "Suivis" && !store.watchedMarketIDs.isEmpty {
+                                        Text("\(store.watchedMarketIDs.count)").font(.system(size: 7, weight: .black)).padding(.horizontal, 5).padding(.vertical, 3).background(Color.konsensViolet.opacity(0.22), in: Capsule())
+                                    }
                                 }
                                 .font(.system(size: 10, weight: .bold, design: .rounded))
                                 .foregroundStyle(selectedCategory == category ? Color.white : Color.konsensMuted)
@@ -60,7 +80,7 @@ struct MarketsView: View {
                 }
 
                 HStack {
-                    sectionTitle("EXPLORE", selectedCategory == "Tous" ? "Tous les marchés" : selectedCategory)
+                    sectionTitle("EXPLORE", selectedCategory == "Tous" ? "Tous les marchés" : selectedCategory == "Suivis" ? "Mes marchés suivis" : selectedCategory)
                     Spacer()
                     Text("\(filteredMarkets.count)").font(.caption.monospacedDigit().bold()).foregroundStyle(Color.konsensMuted)
                 }
@@ -69,12 +89,15 @@ struct MarketsView: View {
 
                 if filteredMarkets.isEmpty {
                     VStack(spacing: 12) {
-                        Image(systemName: "sparkles.rectangle.stack.fill").font(.largeTitle).foregroundStyle(Color.konsensViolet)
-                        Text("Aucun marché dans cette catégorie").font(.headline)
+                        Image(systemName: selectedCategory == "Suivis" ? "star" : "sparkles.rectangle.stack.fill").font(.largeTitle).foregroundStyle(Color.konsensViolet)
+                        Text(selectedCategory == "Suivis" ? "Ta watchlist est vide" : "Aucun marché dans cette catégorie").font(.headline)
+                        if selectedCategory == "Suivis" {
+                            Text("Ajoute une étoile aux marchés que tu veux suivre. Ils remonteront aussi dans ton widget Play.").font(.caption).multilineTextAlignment(.center).foregroundStyle(Color.konsensMuted)
+                        }
                     }.frame(maxWidth: .infinity).padding(30).playPanel()
                 } else {
                     ForEach(filteredMarkets) { market in
-                        PlayMarketRow(market: market, amount: amount) { selectedMarket = market }
+                        PlayMarketRow(market: market, amount: amount, watched: store.watchedMarketIDs.contains(market.id)) { selectedMarket = market }
                     }
                 }
 
@@ -102,8 +125,8 @@ struct MarketsView: View {
         }
     }
 
-    private func heat(_ market: Market) -> Int {
-        (market.tags.contains("featured") ? 100000 : 0) + (market.tags.contains("trending") ? 50000 : 0) + Int(market.volumeKoins)
+    private func heat(_ market: Market) -> Double {
+        (market.tags.contains("featured") ? 100000 : 0) + (market.tags.contains("trending") ? 50000 : 0) + abs(market.movement24h) * 1000 + market.volume24h + market.volumeKoins
     }
 }
 
@@ -121,7 +144,7 @@ private struct PlayHero: View {
                 Text("Et toi,\ntu mises sur quoi ?")
                     .font(.system(size: 38, weight: .black, design: .rounded))
                     .tracking(-1.4)
-                Text("Actualité, sport, crypto, tech, économie. Les probabilités bougent avec les positions du marché Konsens.")
+                Text("Actualité, sport, crypto, tech, économie. Suis les marchés, observe les mouvements et confronte ton intuition au consensus.")
                     .font(.caption).foregroundStyle(Color.konsensMuted).lineSpacing(3)
                 HStack(spacing: 7) {
                     heroStat("\(markets.count)", "marchés")
@@ -134,8 +157,8 @@ private struct PlayHero: View {
                 Circle().stroke(Color.konsensViolet.opacity(0.28), lineWidth: 1)
                 Circle().stroke(Color.konsensGreen.opacity(0.12), lineWidth: 1).padding(13)
                 VStack(spacing: 1) {
-                    Text("OUI").font(.system(size: 7, weight: .black)).foregroundStyle(Color.konsensMuted)
-                    Text("?").font(.system(size: 42, weight: .black, design: .rounded)).foregroundStyle(LinearGradient(colors: [Color.konsensViolet, Color.konsensGreen], startPoint: .top, endPoint: .bottom))
+                    Text("PULSE").font(.system(size: 7, weight: .black)).foregroundStyle(Color.konsensMuted)
+                    Image(systemName: "waveform.path.ecg").font(.system(size: 32, weight: .bold)).foregroundStyle(LinearGradient(colors: [Color.konsensViolet, Color.konsensGreen], startPoint: .top, endPoint: .bottom))
                 }
             }.frame(width: 104, height: 104)
         }
@@ -152,34 +175,80 @@ private struct PlayHero: View {
     }
 }
 
-private struct FeaturedPlayCard: View {
-    let market: Market
-    let open: () -> Void
+private struct PlayPulseNative: View {
+    let markets: [Market]
+    let activity: [PlayActivity]
+    let open: (Market) -> Void
 
     var body: some View {
-        Button(action: open) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("\(categoryIcon(market.category))  \(market.category.uppercased())").font(.system(size: 7, weight: .black)).foregroundStyle(Color.konsensMuted)
-                    Spacer()
-                    if market.tags.contains("trending") { Text("TENDANCE").font(.system(size: 6, weight: .black)).foregroundStyle(Color.konsensGreen).padding(5).background(Color.konsensGreen.opacity(0.08), in: Capsule()) }
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                HStack(spacing: 6) {
+                    Circle().fill(Color.konsensGreen).frame(width: 5, height: 5).shadow(color: Color.konsensGreen, radius: 5)
+                    Text("KONSENS PULSE").font(.system(size: 7, weight: .black, design: .rounded)).tracking(1.1).foregroundStyle(Color.konsensViolet)
+                    Text("Ce qui bouge maintenant").font(.caption2.bold())
                 }
-                Text(market.question).font(.system(size: 15, weight: .bold, design: .rounded)).lineLimit(3).multilineTextAlignment(.leading)
-                Spacer(minLength: 4)
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("\(market.yesProbability)%").font(.system(size: 27, weight: .black, design: .rounded)).foregroundStyle(Color.white)
-                        Text("OUI · x\(odd(market.yesProbability))").font(.system(size: 7, weight: .bold)).foregroundStyle(Color.konsensViolet)
+                Spacer()
+                Text("24 H").font(.system(size: 6, weight: .black)).foregroundStyle(Color.konsensMuted)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 7) {
+                    ForEach(markets) { market in
+                        Button { open(market) } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("\(categoryIcon(market.category))  \(market.category.uppercased())").font(.system(size: 6, weight: .black)).foregroundStyle(Color.konsensMuted)
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text("\(market.yesProbability)%").font(.headline.monospacedDigit().bold())
+                                    MovementChip(value: market.movement24h)
+                                }
+                                Text("\(Int(market.volume24h)) K · \(market.trades24h) trades").font(.system(size: 6)).foregroundStyle(Color.konsensMuted)
+                            }.frame(width: 128, alignment: .leading).padding(10).background(Color.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 12))
+                        }.buttonStyle(.plain)
                     }
-                    Spacer()
-                    Text("\(Int(market.volumeKoins)) K vol.").font(.system(size: 7)).foregroundStyle(Color.konsensMuted)
+                    ForEach(activity.prefix(3)) { item in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("\(item.side == "sell" ? "REVENTE" : "POSITION") \(item.outcome.uppercased())").font(.system(size: 6, weight: .black)).foregroundStyle(item.outcome == "yes" ? Color.konsensPositive : Color.konsensNegative)
+                            Text("\(Int(item.credits)) K").font(.headline.monospacedDigit().bold())
+                            Text(timeAgo(item.occurredAt)).font(.system(size: 6)).foregroundStyle(Color.konsensMuted)
+                        }.frame(width: 112, alignment: .leading).padding(10).background(Color.white.opacity(0.025), in: RoundedRectangle(cornerRadius: 12))
+                    }
                 }
             }
-            .frame(width: 226, height: 158, alignment: .leading)
-            .padding(15)
-            .background(LinearGradient(colors: [Color.konsensViolet.opacity(0.13), Color.black.opacity(0.16)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.konsensViolet.opacity(0.20)))
-        }.buttonStyle(.plain)
+        }.padding(13).background(Color.konsensViolet.opacity(0.045), in: RoundedRectangle(cornerRadius: 17)).overlay(RoundedRectangle(cornerRadius: 17).stroke(Color.konsensViolet.opacity(0.13)))
+    }
+}
+
+private struct FeaturedPlayCard: View {
+    let market: Market
+    let watched: Bool
+    let open: () -> Void
+    let watch: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("\(categoryIcon(market.category))  \(market.category.uppercased())").font(.system(size: 7, weight: .black)).foregroundStyle(Color.konsensMuted)
+                Spacer()
+                MovementChip(value: market.movement24h)
+                Button(action: watch) { Image(systemName: watched ? "star.fill" : "star").font(.caption).foregroundStyle(watched ? Color.konsensGold : Color.konsensMuted) }.buttonStyle(.plain)
+            }
+            Text(market.question).font(.system(size: 15, weight: .bold, design: .rounded)).lineLimit(3).multilineTextAlignment(.leading)
+            Spacer(minLength: 4)
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("\(market.yesProbability)%").font(.system(size: 27, weight: .black, design: .rounded)).foregroundStyle(Color.white)
+                    Text("OUI · x\(odd(market.yesProbability))").font(.system(size: 7, weight: .bold)).foregroundStyle(Color.konsensViolet)
+                }
+                Spacer()
+                Text("\(Int(market.volume24h > 0 ? market.volume24h : market.volumeKoins)) K vol.").font(.system(size: 7)).foregroundStyle(Color.konsensMuted)
+            }
+        }
+        .frame(width: 226, height: 158, alignment: .leading)
+        .padding(15)
+        .background(LinearGradient(colors: [Color.konsensViolet.opacity(0.13), Color.black.opacity(0.16)], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.konsensViolet.opacity(0.20)))
+        .contentShape(Rectangle())
+        .onTapGesture(perform: open)
     }
 }
 
@@ -187,40 +256,42 @@ private struct PlayMarketRow: View {
     @EnvironmentObject private var store: AppStore
     let market: Market
     let amount: Int
+    let watched: Bool
     let open: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Button(action: open) {
-                VStack(alignment: .leading, spacing: 11) {
-                    HStack(spacing: 9) {
-                        Text(categoryIcon(market.category))
-                            .font(.title3.bold()).frame(width: 38, height: 38)
-                            .background(categoryColor(market.category).opacity(0.11), in: RoundedRectangle(cornerRadius: 11))
-                            .foregroundStyle(categoryColor(market.category))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(market.category.uppercased()).font(.system(size: 7, weight: .black)).foregroundStyle(Color.konsensMuted)
-                            Text(market.tags.contains("new") ? "NOUVEAU" : market.tags.contains("ending-soon") ? "FIN PROCHE" : market.tags.contains("trending") ? "TENDANCE" : "MARCHÉ OUVERT")
-                                .font(.system(size: 6, weight: .bold)).foregroundStyle(Color.konsensViolet)
-                        }
-                        Spacer()
-                        Text("\(market.yesProbability)%").font(.title3.monospacedDigit().bold())
+            VStack(alignment: .leading, spacing: 11) {
+                HStack(spacing: 9) {
+                    Text(categoryIcon(market.category))
+                        .font(.title3.bold()).frame(width: 38, height: 38)
+                        .background(categoryColor(market.category).opacity(0.11), in: RoundedRectangle(cornerRadius: 11))
+                        .foregroundStyle(categoryColor(market.category))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(market.category.uppercased()).font(.system(size: 7, weight: .black)).foregroundStyle(Color.konsensMuted)
+                        Text(market.tags.contains("new") ? "NOUVEAU" : market.tags.contains("ending-soon") ? "FIN PROCHE" : market.tags.contains("trending") ? "TENDANCE" : "MARCHÉ OUVERT")
+                            .font(.system(size: 6, weight: .bold)).foregroundStyle(Color.konsensViolet)
                     }
-                    Text(market.question).font(.headline).multilineTextAlignment(.leading)
-                    GeometryReader { proxy in
-                        HStack(spacing: 0) {
-                            LinearGradient(colors: [Color.konsensViolet, Color.konsensGreen], startPoint: .leading, endPoint: .trailing)
-                                .frame(width: proxy.size.width * CGFloat(market.yesProbability) / 100)
-                            Color.white.opacity(0.07)
-                        }.clipShape(Capsule())
-                    }.frame(height: 5)
-                    HStack {
-                        Text("\(Int(market.volumeKoins)) K volume").font(.system(size: 7)).foregroundStyle(Color.konsensMuted)
-                        Spacer()
-                        Text(shortDate(market.closesAt)).font(.system(size: 7)).foregroundStyle(Color.konsensMuted)
-                    }
+                    Spacer()
+                    MovementChip(value: market.movement24h)
+                    Text("\(market.yesProbability)%").font(.title3.monospacedDigit().bold())
+                    Button { Task { await store.toggleMarketWatch(market) } } label: { Image(systemName: watched ? "star.fill" : "star").font(.caption).foregroundStyle(watched ? Color.konsensGold : Color.konsensMuted) }.buttonStyle(.plain)
                 }
-            }.buttonStyle(.plain)
+                Text(market.question).font(.headline).multilineTextAlignment(.leading)
+                GeometryReader { proxy in
+                    HStack(spacing: 0) {
+                        LinearGradient(colors: [Color.konsensViolet, Color.konsensGreen], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: proxy.size.width * CGFloat(market.yesProbability) / 100)
+                        Color.white.opacity(0.07)
+                    }.clipShape(Capsule())
+                }.frame(height: 5)
+                HStack {
+                    Text("\(Int(market.volume24h > 0 ? market.volume24h : market.volumeKoins)) K / 24 h").font(.system(size: 7)).foregroundStyle(Color.konsensMuted)
+                    if market.trades24h > 0 { Text("· \(market.trades24h) trades").font(.system(size: 7)).foregroundStyle(Color.konsensMuted) }
+                    Spacer()
+                    Text(shortDate(market.closesAt)).font(.system(size: 7)).foregroundStyle(Color.konsensMuted)
+                }
+            }.contentShape(Rectangle()).onTapGesture(perform: open)
 
             HStack(spacing: 7) {
                 Button { Task { await store.bet(market, outcome: "yes", amount: amount) } } label: {
@@ -243,11 +314,13 @@ private struct PlayMarketDetail: View {
     let market: Market
     @Binding var amount: Int
     @State private var history: [ProbabilityPoint] = []
+    @State private var activity: [PlayActivity] = []
     @State private var yesQuantity = 0.0
     @State private var noQuantity = 0.0
 
     private var yesValue: Double { yesQuantity * Double(market.yesProbability) / 100 }
     private var noValue: Double { noQuantity * Double(100 - market.yesProbability) / 100 }
+    private var related: [Market] { Array(store.markets.filter { $0.id != market.id && ($0.category == market.category || !$0.tags.filter { market.tags.contains($0) }.isEmpty) }.prefix(4)) }
 
     var body: some View {
         ScrollView {
@@ -255,12 +328,17 @@ private struct PlayMarketDetail: View {
                 HStack {
                     Text("\(categoryIcon(market.category))  \(market.category.uppercased())").font(.system(size: 8, weight: .black)).foregroundStyle(Color.konsensViolet)
                     Spacer()
+                    Button { Task { await store.toggleMarketWatch(market) } } label: { Label(store.watchedMarketIDs.contains(market.id) ? "Suivi" : "Suivre", systemImage: store.watchedMarketIDs.contains(market.id) ? "star.fill" : "star").font(.caption2.bold()).padding(9).background(Color.white.opacity(0.05), in: Capsule()) }.buttonStyle(.plain).foregroundStyle(store.watchedMarketIDs.contains(market.id) ? Color.konsensGold : Color.konsensMuted)
                     Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 34, height: 34).background(Color.white.opacity(0.06), in: Circle()) }.buttonStyle(.plain)
                 }
                 Text(market.question).font(.system(size: 31, weight: .black, design: .rounded)).tracking(-1)
                 HStack(alignment: .firstTextBaseline, spacing: 9) {
                     Text("\(market.yesProbability)%").font(.system(size: 48, weight: .black, design: .rounded))
-                    VStack(alignment: .leading, spacing: 1) { Text("PROBABILITÉ OUI").font(.system(size: 7, weight: .black)).foregroundStyle(Color.konsensMuted); Text("Cote Koin x\(odd(market.yesProbability))").font(.caption.bold()).foregroundStyle(Color.konsensViolet) }
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("PROBABILITÉ OUI").font(.system(size: 7, weight: .black)).foregroundStyle(Color.konsensMuted)
+                        Text("Cote Koin x\(odd(market.yesProbability))").font(.caption.bold()).foregroundStyle(Color.konsensViolet)
+                        MovementChip(value: market.movement24h)
+                    }
                 }
 
                 if history.count > 1 {
@@ -272,10 +350,11 @@ private struct PlayMarketDetail: View {
                     RoundedRectangle(cornerRadius: 2).fill(LinearGradient(colors: [Color.konsensViolet, Color.konsensGreen], startPoint: .leading, endPoint: .trailing)).frame(height: 5)
                 }
 
-                HStack(spacing: 7) {
-                    detailMetric("VOLUME", "\(Int(market.volumeKoins)) K")
-                    detailMetric("OUVERT", "\(Int(market.openInterestKoins)) K")
-                    detailMetric("ÉCHÉANCE", shortDate(market.closesAt))
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 7) {
+                    detailMetric("VOLUME TOTAL", "\(Int(market.volumeKoins)) K")
+                    detailMetric("VOLUME 24 H", "\(Int(market.volume24h)) K")
+                    detailMetric("TRADES 24 H", "\(market.trades24h)")
+                    detailMetric("INTÉRÊT OUVERT", "\(Int(market.openInterestKoins)) K")
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -299,7 +378,27 @@ private struct PlayMarketDetail: View {
                     }
                 }.playPanel()
 
+                if !activity.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack { Text("ACTIVITÉ RÉCENTE").font(.system(size: 7, weight: .black)).tracking(1).foregroundStyle(Color.konsensViolet); Spacer(); Text("ANONYMISÉE").font(.system(size: 6, weight: .bold)).foregroundStyle(Color.konsensMuted) }
+                        ForEach(activity.prefix(8)) { item in
+                            HStack(spacing: 8) {
+                                Text(item.outcome.uppercased()).font(.system(size: 6, weight: .black)).foregroundStyle(item.outcome == "yes" ? Color.konsensPositive : Color.konsensNegative).frame(width: 30)
+                                Text("\(item.side == "sell" ? "Revente" : "Position") · \(Int(item.credits)) K").font(.caption2)
+                                Spacer()
+                                Text(timeAgo(item.occurredAt)).font(.system(size: 6)).foregroundStyle(Color.konsensMuted)
+                            }.padding(.vertical, 5).overlay(alignment: .bottom) { Rectangle().fill(Color.white.opacity(0.04)).frame(height: 1) }
+                        }
+                    }.playPanel()
+                }
+
                 AmountPicker(amount: $amount, accent: Color.konsensViolet)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("IMPACT DE TA POSITION").font(.system(size: 7, weight: .black)).foregroundStyle(Color.konsensViolet)
+                    Text("Sur OUI, \(amount) K peuvent produire environ \(max(0, Int(Double(amount) * (100 / Double(max(2, market.yesProbability))) - Double(amount)))) K de gain si le marché se résout en ta faveur.").font(.caption2).foregroundStyle(Color.konsensMuted)
+                    Text("Si tu as tort, la mise engagée peut être perdue.").font(.system(size: 7)).foregroundStyle(Color.konsensNegative)
+                }.padding(12).background(Color.konsensViolet.opacity(0.045), in: RoundedRectangle(cornerRadius: 12))
 
                 HStack(spacing: 8) {
                     Button { Task { await store.bet(market, outcome: "yes", amount: amount); await load() } } label: { Text("Acheter OUI · \(amount) K").frame(maxWidth: .infinity).padding(13).background(Color.konsensPositive, in: RoundedRectangle(cornerRadius: 12)) }.buttonStyle(.plain).foregroundStyle(Color(red: 0.02, green: 0.08, blue: 0.06)).disabled(store.credits < amount)
@@ -310,6 +409,24 @@ private struct PlayMarketDetail: View {
                     positionCard("OUI", value: yesValue) { Task { await store.sellBet(market, outcome: "yes", amount: amount); await load() } }
                     positionCard("NON", value: noValue) { Task { await store.sellBet(market, outcome: "no", amount: amount); await load() } }
                 }
+
+                if !related.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("MARCHÉS LIÉS").font(.system(size: 7, weight: .black)).tracking(1).foregroundStyle(Color.konsensViolet)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(related) { item in
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(item.category.uppercased()).font(.system(size: 6, weight: .black)).foregroundStyle(Color.konsensMuted)
+                                        Text(item.question).font(.caption.bold()).lineLimit(3)
+                                        HStack { Text("\(item.yesProbability)% OUI").font(.caption2.monospacedDigit().bold()).foregroundStyle(Color.konsensPositive); MovementChip(value: item.movement24h) }
+                                    }.frame(width: 170, height: 92, alignment: .leading).padding(11).background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 13))
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Text("Les cotes traduisent uniquement le prix/probabilité du marché en Koins fictifs. Aucun argent réel, aucun cash-out.")
                     .font(.system(size: 8)).foregroundStyle(Color.konsensMuted)
             }.padding(20).padding(.bottom, 30)
@@ -339,6 +456,18 @@ private struct PlayMarketDetail: View {
         let rows: [Pos] = (try? await store.supabase.from("positions").select("side,quantity").eq("user_id", value: userID).eq("market_id", value: market.id).execute().value) ?? []
         yesQuantity = rows.first(where: { $0.side == "yes" })?.quantity ?? 0
         noQuantity = rows.first(where: { $0.side == "no" })?.quantity ?? 0
+        activity = await store.activity(for: market)
+    }
+}
+
+private struct MovementChip: View {
+    let value: Double
+    var body: some View {
+        Text(abs(value) < 0.05 ? "0,0 pt" : String(format: "%@%.1f pt", value > 0 ? "+" : "", value))
+            .font(.system(size: 6, weight: .black, design: .rounded))
+            .foregroundStyle(abs(value) < 0.05 ? Color.konsensMuted : value > 0 ? Color.konsensPositive : Color.konsensNegative)
+            .padding(.horizontal, 6).padding(.vertical, 4)
+            .background((abs(value) < 0.05 ? Color.white : value > 0 ? Color.konsensPositive : Color.konsensNegative).opacity(0.07), in: Capsule())
     }
 }
 
@@ -476,4 +605,14 @@ private func shortDate(_ raw: String) -> String {
     let formatter = ISO8601DateFormatter()
     guard let date = formatter.date(from: raw) else { return raw }
     return date.formatted(date: .abbreviated, time: .omitted)
+}
+
+private func timeAgo(_ raw: String) -> String {
+    let formatter = ISO8601DateFormatter()
+    guard let date = formatter.date(from: raw) else { return "récent" }
+    let seconds = max(0, Date().timeIntervalSince(date))
+    if seconds < 60 { return "à l’instant" }
+    if seconds < 3600 { return "il y a \(Int(seconds / 60)) min" }
+    if seconds < 86400 { return "il y a \(Int(seconds / 3600)) h" }
+    return "il y a \(Int(seconds / 86400)) j"
 }
