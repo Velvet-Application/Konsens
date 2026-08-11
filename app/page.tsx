@@ -1,7 +1,6 @@
-import FinanceShell from "./finance-shell";
+import V3Shell from "./v3-shell";
 import MonetizationLayer from "./monetization-layer";
 
-// Cloudflare frontend deployment marker: finance-v1
 export default function Home() {
-  return <MonetizationLayer><FinanceShell /></MonetizationLayer>;
+  return <MonetizationLayer><V3Shell /></MonetizationLayer>;
 }
