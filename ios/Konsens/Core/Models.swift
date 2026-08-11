@@ -6,6 +6,9 @@ struct Market: Identifiable, Hashable, Decodable {
     let question: String
     let yesProbability: Int
     let movement: Int
+    let movement24h: Double
+    let volume24h: Double
+    let trades24h: Int
     let closesAt: String
     let resolutionRules: String
     let sourceType: String
@@ -20,9 +23,21 @@ struct Market: Identifiable, Hashable, Decodable {
     let openInterestKoins: Double
     let tags: [String]
 
-    init(id: UUID, category: String, question: String, yesProbability: Int, movement: Int = 0, closesAt: String, resolutionRules: String = "", sourceType: String = "manual", sourceURLs: [String] = [], sourceTitles: [String] = [], sourceSummary: String? = nil, aiConfidence: Double? = nil, aiRationale: String? = nil, suggestedStakeMin: Int? = nil, suggestedStakeMax: Int? = nil, volumeKoins: Double = 0, openInterestKoins: Double = 0, tags: [String] = []) {
-        self.id = id; self.category = category; self.question = question; self.yesProbability = yesProbability; self.movement = movement; self.closesAt = closesAt; self.resolutionRules = resolutionRules; self.sourceType = sourceType; self.sourceURLs = sourceURLs; self.sourceTitles = sourceTitles; self.sourceSummary = sourceSummary; self.aiConfidence = aiConfidence; self.aiRationale = aiRationale; self.suggestedStakeMin = suggestedStakeMin; self.suggestedStakeMax = suggestedStakeMax; self.volumeKoins = volumeKoins; self.openInterestKoins = openInterestKoins; self.tags = tags
+    init(id: UUID, category: String, question: String, yesProbability: Int, movement: Int = 0, movement24h: Double = 0, volume24h: Double = 0, trades24h: Int = 0, closesAt: String, resolutionRules: String = "", sourceType: String = "manual", sourceURLs: [String] = [], sourceTitles: [String] = [], sourceSummary: String? = nil, aiConfidence: Double? = nil, aiRationale: String? = nil, suggestedStakeMin: Int? = nil, suggestedStakeMax: Int? = nil, volumeKoins: Double = 0, openInterestKoins: Double = 0, tags: [String] = []) {
+        self.id = id; self.category = category; self.question = question; self.yesProbability = yesProbability; self.movement = movement; self.movement24h = movement24h; self.volume24h = volume24h; self.trades24h = trades24h; self.closesAt = closesAt; self.resolutionRules = resolutionRules; self.sourceType = sourceType; self.sourceURLs = sourceURLs; self.sourceTitles = sourceTitles; self.sourceSummary = sourceSummary; self.aiConfidence = aiConfidence; self.aiRationale = aiRationale; self.suggestedStakeMin = suggestedStakeMin; self.suggestedStakeMax = suggestedStakeMax; self.volumeKoins = volumeKoins; self.openInterestKoins = openInterestKoins; self.tags = tags
     }
+}
+
+struct PlayActivity: Identifiable, Hashable {
+    let id = UUID()
+    let marketID: UUID
+    let question: String
+    let category: String
+    let outcome: String
+    let side: String
+    let tradeCount: Int
+    let credits: Double
+    let occurredAt: String
 }
 
 struct WealthSnapshot {
