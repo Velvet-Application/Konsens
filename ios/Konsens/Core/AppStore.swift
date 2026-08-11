@@ -15,6 +15,8 @@ final class AppStore: ObservableObject {
     @Published var credits = 0
     @Published var streak = 0
     @Published var markets: [Market] = []
+    @Published var watchedMarketIDs: Set<UUID> = []
+    @Published var playActivity: [PlayActivity] = []
     @Published var assets: [AssetQuote] = []
     @Published var lessons: [LearningLesson] = []
     @Published var toast: String?
@@ -67,7 +69,7 @@ final class AppStore: ObservableObject {
     }
 
     func refreshFinance() async {
-        guard supabase.auth.currentUser != nil else { return }
+        guard let currentUser = supabase.auth.currentUser else { return }
         struct WealthRow: Decodable { let cash_value: Double; let investments_value: Double; let bets_value: Double; let total_value: Double }
         if let rows: [WealthRow] = try? await supabase.rpc("get_my_wealth_snapshot").execute().value, let row = rows.first {
             wealth = WealthSnapshot(cash: row.cash_value, investments: row.investments_value, bets: row.bets_value, total: row.total_value); credits = Int(row.cash_value.rounded(.down))
@@ -78,9 +80,24 @@ final class AppStore: ObservableObject {
             let source_type: String; let source_urls: [String]; let source_titles: [String]; let source_summary: String?; let ai_confidence: Double?; let ai_rationale: String?
             let suggested_stake_min: Int?; let suggested_stake_max: Int?; let volume_koins: Double; let open_interest_koins: Double; let tags: [String]
         }
-        if let rows: [RawMarket] = try? await supabase.from("markets").select("id,category,question,yes_probability,closes_at,resolution_rules,source_type,source_urls,source_titles,source_summary,ai_confidence,ai_rationale,suggested_stake_min,suggested_stake_max,volume_koins,open_interest_koins,tags").eq("status", value: "open").order("created_at", ascending: false).limit(60).execute().value {
-            markets = rows.map { Market(id: $0.id, category: $0.category, question: $0.question, yesProbability: Int(($0.yes_probability * 100).rounded()), closesAt: $0.closes_at, resolutionRules: $0.resolution_rules, sourceType: $0.source_type, sourceURLs: $0.source_urls, sourceTitles: $0.source_titles, sourceSummary: $0.source_summary, aiConfidence: $0.ai_confidence, aiRationale: $0.ai_rationale, suggestedStakeMin: $0.suggested_stake_min, suggestedStakeMax: $0.suggested_stake_max, volumeKoins: $0.volume_koins, openInterestKoins: $0.open_interest_koins, tags: $0.tags) }
+        struct RawMover: Decodable { let market_id: UUID; let movement_24h: Double; let volume_24h: Double; let trades_24h: Int }
+        struct LimitParams: Encodable { let p_limit: Int }
+        let rawMarkets: [RawMarket] = (try? await supabase.from("markets").select("id,category,question,yes_probability,closes_at,resolution_rules,source_type,source_urls,source_titles,source_summary,ai_confidence,ai_rationale,suggested_stake_min,suggested_stake_max,volume_koins,open_interest_koins,tags").eq("status", value: "open").order("created_at", ascending: false).limit(80).execute().value) ?? []
+        let moverRows: [RawMover] = (try? await supabase.rpc("get_market_movers", params: LimitParams(p_limit: 30)).execute().value) ?? []
+        let moverMap = Dictionary(uniqueKeysWithValues: moverRows.map { ($0.market_id, $0) })
+        markets = rawMarkets.map {
+            let mover = moverMap[$0.id]
+            return Market(id: $0.id, category: $0.category, question: $0.question, yesProbability: Int(($0.yes_probability * 100).rounded()), movement: Int((mover?.movement_24h ?? 0).rounded()), movement24h: mover?.movement_24h ?? 0, volume24h: mover?.volume_24h ?? 0, trades24h: mover?.trades_24h ?? 0, closesAt: $0.closes_at, resolutionRules: $0.resolution_rules, sourceType: $0.source_type, sourceURLs: $0.source_urls, sourceTitles: $0.source_titles, sourceSummary: $0.source_summary, aiConfidence: $0.ai_confidence, aiRationale: $0.ai_rationale, suggestedStakeMin: $0.suggested_stake_min, suggestedStakeMax: $0.suggested_stake_max, volumeKoins: $0.volume_koins, openInterestKoins: $0.open_interest_koins, tags: $0.tags)
         }
+
+        struct WatchRow: Decodable { let market_id: UUID }
+        let watchRows: [WatchRow] = (try? await supabase.from("market_watchlist").select("market_id").eq("user_id", value: currentUser.id).execute().value) ?? []
+        watchedMarketIDs = Set(watchRows.map(\.market_id))
+
+        struct ActivityParams: Encodable { let p_market_id: UUID?; let p_limit: Int }
+        struct RawActivity: Decodable { let market_id: UUID; let question: String; let category: String; let outcome: String; let side: String; let trade_count: Int; let credits: Double; let occurred_at: String }
+        let activityRows: [RawActivity] = (try? await supabase.rpc("get_market_activity", params: ActivityParams(p_market_id: nil, p_limit: 30)).execute().value) ?? []
+        playActivity = activityRows.map { PlayActivity(marketID: $0.market_id, question: $0.question, category: $0.category, outcome: $0.outcome, side: $0.side, tradeCount: $0.trade_count, credits: $0.credits, occurredAt: $0.occurred_at) }
 
         struct RawAsset: Decodable { let id: UUID; let symbol: String; let name: String; let kind: String; let currency: String; let external_ref: String }
         struct PriceRow: Decodable { let price: Double }
@@ -101,6 +118,32 @@ final class AppStore: ObservableObject {
             lessons = rows.map { LearningLesson(id: $0.id, title: $0.title, summary: $0.summary, concept: $0.concept, xpReward: $0.xp_reward, position: $0.position, category: $0.category, durationMinutes: $0.duration_minutes, riskNote: $0.risk_note, level: $0.level, objectives: $0.learning_objectives, takeaways: $0.key_takeaways, chapters: $0.content_json, media: $0.media_json, quiz: $0.quiz_json) }
         }
         Task { await syncWidgetSnapshot() }
+    }
+
+    func toggleMarketWatch(_ market: Market) async {
+        guard let userID = supabase.auth.currentUser?.id else { return }
+        if watchedMarketIDs.contains(market.id) {
+            do {
+                try await supabase.from("market_watchlist").delete().eq("user_id", value: userID).eq("market_id", value: market.id).execute()
+                var next = watchedMarketIDs; next.remove(market.id); watchedMarketIDs = next
+                showToast("Marché retiré des suivis")
+            } catch { showToast("Impossible de modifier les suivis") }
+        } else {
+            struct WatchInsert: Encodable { let user_id: UUID; let market_id: UUID }
+            do {
+                try await supabase.from("market_watchlist").insert(WatchInsert(user_id: userID, market_id: market.id)).execute()
+                var next = watchedMarketIDs; next.insert(market.id); watchedMarketIDs = next
+                showToast("Marché ajouté aux suivis")
+            } catch { showToast("Impossible de modifier les suivis") }
+        }
+        Task { await syncWidgetSnapshot() }
+    }
+
+    func activity(for market: Market, limit: Int = 16) async -> [PlayActivity] {
+        struct Params: Encodable { let p_market_id: UUID?; let p_limit: Int }
+        struct Raw: Decodable { let market_id: UUID; let question: String; let category: String; let outcome: String; let side: String; let trade_count: Int; let credits: Double; let occurred_at: String }
+        let rows: [Raw] = (try? await supabase.rpc("get_market_activity", params: Params(p_market_id: market.id, p_limit: limit)).execute().value) ?? []
+        return rows.map { PlayActivity(marketID: $0.market_id, question: $0.question, category: $0.category, outcome: $0.outcome, side: $0.side, tradeCount: $0.trade_count, credits: $0.credits, occurredAt: $0.occurred_at) }
     }
 
     func liveQuote(for asset: AssetQuote, range: String = "1mo") async -> LiveMarketQuote? {
@@ -138,17 +181,17 @@ final class AppStore: ObservableObject {
     }
 
     private func syncWidgetSnapshot() async {
-        struct WidgetMarket: Codable { let question: String; let category: String; let probability: Int; let volume: Int }
+        struct WidgetMarket: Codable { let question: String; let category: String; let probability: Int; let volume: Int; let movement: Double }
         struct WidgetAsset: Codable { let symbol: String; let name: String; let price: Double; let change: Double; let currency: String }
         guard let defaults = UserDefaults(suiteName: "group.com.konsens.beta") else { return }
         defaults.set(Int(wealth.total.rounded()), forKey: "konsens_widget_wealth")
         defaults.set(wealth.performance, forKey: "konsens_widget_performance")
 
         let rankedMarkets = markets.sorted {
-            let left = ($0.tags.contains("featured") ? 100000 : 0) + Int($0.volumeKoins)
-            let right = ($1.tags.contains("featured") ? 100000 : 0) + Int($1.volumeKoins)
+            let left = (watchedMarketIDs.contains($0.id) ? 200000 : 0) + ($0.tags.contains("featured") ? 100000 : 0) + Int(abs($0.movement24h) * 1000) + Int($0.volume24h)
+            let right = (watchedMarketIDs.contains($1.id) ? 200000 : 0) + ($1.tags.contains("featured") ? 100000 : 0) + Int(abs($1.movement24h) * 1000) + Int($1.volume24h)
             return left > right
-        }.prefix(3).map { WidgetMarket(question: $0.question, category: $0.category, probability: $0.yesProbability, volume: Int($0.volumeKoins)) }
+        }.prefix(3).map { WidgetMarket(question: $0.question, category: $0.category, probability: $0.yesProbability, volume: Int($0.volume24h > 0 ? $0.volume24h : $0.volumeKoins), movement: $0.movement24h) }
         if let data = try? JSONEncoder().encode(Array(rankedMarkets)) { defaults.set(data, forKey: "konsens_widget_markets") }
 
         var preferredAssets = assets
@@ -181,6 +224,6 @@ final class AppStore: ObservableObject {
         } catch { showToast("Activation Premium indisponible") }
     }
 
-    func signOut() async { try? await supabase.auth.signOut(); isAuthenticated = false; onboardingComplete = false; wealth = WealthSnapshot(); credits = 0 }
+    func signOut() async { try? await supabase.auth.signOut(); isAuthenticated = false; onboardingComplete = false; wealth = WealthSnapshot(); credits = 0; watchedMarketIDs = []; playActivity = [] }
     func showToast(_ message: String) { toast = message; Task { try? await Task.sleep(for: .seconds(2)); if toast == message { toast = nil } } }
 }
