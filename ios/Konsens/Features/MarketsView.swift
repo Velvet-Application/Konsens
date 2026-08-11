@@ -320,7 +320,15 @@ private struct PlayMarketDetail: View {
 
     private var yesValue: Double { yesQuantity * Double(market.yesProbability) / 100 }
     private var noValue: Double { noQuantity * Double(100 - market.yesProbability) / 100 }
-    private var related: [Market] { Array(store.markets.filter { $0.id != market.id && ($0.category == market.category || !$0.tags.filter { market.tags.contains($0) }.isEmpty) }.prefix(4)) }
+    private var related: [Market] {
+        let currentTags = Set(market.tags)
+        let matches = store.markets.filter { candidate in
+            guard candidate.id != market.id else { return false }
+            if candidate.category == market.category { return true }
+            return candidate.tags.contains { tag in currentTags.contains(tag) }
+        }
+        return Array(matches.prefix(4))
+    }
 
     var body: some View {
         ScrollView {
