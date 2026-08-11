@@ -1,6 +1,7 @@
 import Foundation
 import UserNotifications
 import Supabase
+import WidgetKit
 
 struct KonsensNotification: Identifiable, Decodable, Hashable {
     let id: UUID
@@ -94,6 +95,7 @@ final class NotificationManager: ObservableObject {
 
         events = mapped
         seen.formUnion(mapped.map(\.id))
+        await syncJourneySnapshot(store: store)
     }
 
     func markRead(_ event: KonsensNotification, store: AppStore) async {
@@ -116,6 +118,38 @@ final class NotificationManager: ObservableObject {
                 )
                 : $0
         }
+    }
+
+    private func syncJourneySnapshot(store: AppStore) async {
+        struct Empty: Encodable {}
+        struct ScoreRow: Decodable {
+            let total_score: Double
+            let archetype: String
+            let streak_days: Int
+        }
+        struct SessionRow: Decodable {
+            let understand_completed_at: String?
+            let predict_completed_at: String?
+            let decide_completed_at: String?
+            let learn_completed_at: String?
+        }
+        guard let defaults = UserDefaults(suiteName: "group.com.konsens.beta") else { return }
+        let scoreRows: [ScoreRow] = (try? await store.supabase.rpc("get_my_konsens_score", params: Empty()).execute().value) ?? []
+        let session: SessionRow? = try? await store.supabase.rpc("ensure_daily_session", params: Empty()).single().execute().value
+        if let score = scoreRows.first {
+            defaults.set(Int(score.total_score.rounded()), forKey: "konsens_journey_score")
+            defaults.set(score.archetype, forKey: "konsens_journey_archetype")
+            defaults.set(score.streak_days, forKey: "konsens_journey_streak")
+        }
+        if let session {
+            let completed = [session.understand_completed_at, session.predict_completed_at, session.decide_completed_at, session.learn_completed_at].filter { $0 != nil }.count
+            let next = session.understand_completed_at == nil ? "Comprendre" : session.predict_completed_at == nil ? "Prédire" : session.decide_completed_at == nil ? "Décider" : session.learn_completed_at == nil ? "Apprendre" : "Terminé"
+            defaults.set(completed, forKey: "konsens_journey_progress")
+            defaults.set(next, forKey: "konsens_journey_next")
+        }
+        defaults.set(Date().timeIntervalSince1970, forKey: "konsens_widget_updated")
+        WidgetCenter.shared.reloadAllTimelines()
+        WatchBridge.shared.sendSnapshot()
     }
 
     private func scheduleLocal(_ event: KonsensNotification) async {
