@@ -28,6 +28,7 @@ struct WidgetMarket: Codable, Hashable {
     let category: String
     let probability: Int
     let volume: Int
+    let movement: Double
 }
 
 struct WidgetAsset: Codable, Hashable {
@@ -49,7 +50,7 @@ struct KonsensWidgetEntry: TimelineEntry {
 
 struct KonsensWidgetProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> KonsensWidgetEntry {
-        .init(date: .now, configuration: KonsensWidgetIntent(), wealth: 1000, performance: 0, markets: [.init(question: "Bitcoin dépassera-t-il 150 000 $ avant fin 2026 ?", category: "Crypto", probability: 28, volume: 0)], assets: [.init(symbol: "AAPL", name: "Apple", price: 221.45, change: 1.3, currency: "USD")])
+        .init(date: .now, configuration: KonsensWidgetIntent(), wealth: 1000, performance: 0, markets: [.init(question: "Bitcoin dépassera-t-il 150 000 $ avant fin 2026 ?", category: "Crypto", probability: 28, volume: 0, movement: 2.4)], assets: [.init(symbol: "AAPL", name: "Apple", price: 221.45, change: 1.3, currency: "USD")])
     }
 
     func snapshot(for configuration: KonsensWidgetIntent, in context: Context) async -> KonsensWidgetEntry {
@@ -165,9 +166,21 @@ private struct PlayRow: View {
     let large: Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            HStack { Text(market.category.uppercased()).font(.system(size: 6, weight: .bold)).foregroundStyle(.purple); Spacer(); Text("\(market.probability)%").font((large ? Font.title2 : Font.caption).monospacedDigit().bold()).foregroundStyle(.mint) }
+            HStack {
+                Text(market.category.uppercased()).font(.system(size: 6, weight: .bold)).foregroundStyle(.purple)
+                Spacer()
+                Text("\(market.probability)%").font((large ? Font.title2 : Font.caption).monospacedDigit().bold()).foregroundStyle(.mint)
+            }
             Text(market.question).font(.system(size: large ? 11 : 9, weight: .semibold)).lineLimit(large ? 3 : 2)
-            HStack { Text("OUI").font(.system(size: 6, weight: .black)).foregroundStyle(.mint); Text("x\(String(format: "%.2f", 1 / max(0.02, Double(market.probability) / 100)))").font(.system(size: 7, weight: .bold)).foregroundStyle(.secondary); Spacer(); Text("\(market.volume) K vol.").font(.system(size: 6)).foregroundStyle(.secondary) }
+            HStack {
+                Text("OUI").font(.system(size: 6, weight: .black)).foregroundStyle(.mint)
+                Text("x\(String(format: "%.2f", 1 / max(0.02, Double(market.probability) / 100)))").font(.system(size: 7, weight: .bold)).foregroundStyle(.secondary)
+                if abs(market.movement) >= 0.05 {
+                    Text(String(format: "%@%.1f pt", market.movement > 0 ? "+" : "", market.movement)).font(.system(size: 6, weight: .bold)).foregroundStyle(market.movement >= 0 ? Color.mint : Color.red)
+                }
+                Spacer()
+                Text("\(market.volume) K").font(.system(size: 6)).foregroundStyle(.secondary)
+            }
         }
         .padding(8).background(Color.purple.opacity(0.07), in: RoundedRectangle(cornerRadius: 11))
     }
