@@ -8,8 +8,9 @@ type State={subscription_tier:string;status:string;trial_ends_at:string|null};
 
 export default function PremiumV2({compact=false}:{compact?:boolean}){
  const[state,setState]=useState<State>({subscription_tier:"free",status:"none",trial_ends_at:null});const[busy,setBusy]=useState(false);const[msg,setMsg]=useState("");
+ async function refresh(){const {data:auth}=await supabase.auth.getUser();if(!auth.user)return;const{data}=await supabase.rpc("refresh_my_premium_status");const row=Array.isArray(data)?data[0]:data;if(row)setState(row as State)}
+ // eslint-disable-next-line react-hooks/set-state-in-effect
  useEffect(()=>{void refresh()},[]);
- const refresh=async()=>{const {data:auth}=await supabase.auth.getUser();if(!auth.user)return;const{data}=await supabase.rpc("refresh_my_premium_status");const row=Array.isArray(data)?data[0]:data;if(row)setState(row as State)};
  const start=async()=>{setBusy(true);setMsg("Activation…");const{data,error}=await supabase.rpc("start_premium_beta_trial");if(error){setMsg(error.message);setBusy(false);return}const row=Array.isArray(data)?data[0]:data;if(row)setState({subscription_tier:"premium",status:row.status,trial_ends_at:row.trial_ends_at});setMsg("Premium activé : les publicités disparaissent dès le prochain rafraîchissement.");setBusy(false);window.dispatchEvent(new Event("konsens:subscription"));window.setTimeout(()=>location.reload(),800)};
  const active=state.subscription_tier==="premium";
  if(compact)return <section className="premium-v2 compact"><div><span>KONSENS PREMIUM</span><strong>{active?"Premium actif":"14 jours d’essai bêta · puis 4,99 €/mois au lancement"}</strong><p>Sans pub · historiques enrichis · suivi blockchain · analyses avancées · portefeuilles publics.</p></div>{active?<b>ACTIF</b>:<button onClick={start} disabled={busy}>Essayer Premium</button>}</section>;
