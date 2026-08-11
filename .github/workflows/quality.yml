@@ -51,7 +51,12 @@ jobs:
         run: |
           set -euo pipefail
           WATCH_SDK="$(xcrun --sdk watchsimulator --show-sdk-path)"
-          xcrun --sdk watchsimulator swiftc -typecheck -sdk "$WATCH_SDK" -target arm64-apple-watchos10.0-simulator ios/KonsensWatch/KonsensWatchApp.swift
+          xcrun --sdk watchsimulator swiftc \
+            -parse-as-library \
+            -typecheck \
+            -sdk "$WATCH_SDK" \
+            -target arm64-apple-watchos10.0-simulator \
+            ios/KonsensWatch/KonsensWatchApp.swift
   database:
     runs-on: ubuntu-latest
     steps:
