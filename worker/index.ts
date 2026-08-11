@@ -2,6 +2,8 @@
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 
+const KONSENS_RELEASE = "ultimate-2026.08.11-r1";
+
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
@@ -25,9 +27,39 @@ interface ExecutionContext {
 // dangerouslyAllowSVG: true in next.config.js and uncomment below:
 // const imageConfig: ImageConfig = { dangerouslyAllowSVG: true };
 
+function withReleaseHeaders(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set("X-Konsens-Release", KONSENS_RELEASE);
+  headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  headers.set("Pragma", "no-cache");
+  headers.set("Expires", "0");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === "/__version") {
+      return Response.json(
+        {
+          app: "Konsens",
+          release: KONSENS_RELEASE,
+          channel: "production",
+          source: "main",
+        },
+        {
+          headers: {
+            "Cache-Control": "no-store",
+            "X-Konsens-Release": KONSENS_RELEASE,
+          },
+        },
+      );
+    }
 
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
@@ -40,7 +72,9 @@ const worker = {
       }, allowedWidths);
     }
 
-    return handler.fetch(request, env, ctx);
+    const response = await handler.fetch(request, env, ctx);
+    const acceptsHTML = request.headers.get("accept")?.includes("text/html") ?? false;
+    return acceptsHTML ? withReleaseHeaders(response) : response;
   },
 };
 
