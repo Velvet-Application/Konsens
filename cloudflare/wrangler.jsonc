@@ -5,6 +5,7 @@
   "compatibility_date": "2026-08-10",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true, "head_sampling_rate": 1 },
+  "ai": { "binding": "AI" },
   "vars": {
     "ENVIRONMENT": "development",
     "DEMO_MODE": "true",
@@ -17,11 +18,11 @@
   "env": {
     "staging": {
       "name": "konsens-api-staging",
-      "vars": { "ENVIRONMENT": "staging", "DEMO_MODE": "false", "MONETIZATION_MODE": "contextual", "SUPABASE_URL": "https://mxuevsspybxoovsutsbs.supabase.co", "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_Xs7hyyDA2XUkbwXGGfSE2w_tARkgSL7", "ALLOWED_ORIGINS": "https://konsens.cyril-62.chatgpt.site" }
+      "vars": { "ENVIRONMENT": "staging", "DEMO_MODE": "false", "MONETIZATION_MODE": "contextual", "SUPABASE_URL": "https://mxuevsspybxoovsutsbs.supabase.co", "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_Xs7hyyDA2XUkbwXGGfSE2w_tARkgSL7", "ALLOWED_ORIGINS": "https://konsens.cyril-62.chatgpt.site,http://localhost:3000" }
     },
     "production": {
       "name": "konsens-api-production",
-      "vars": { "ENVIRONMENT": "production", "DEMO_MODE": "false", "MONETIZATION_MODE": "contextual", "SUPABASE_URL": "https://mxuevsspybxoovsutsbs.supabase.co", "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_Xs7hyyDA2XUkbwXGGfSE2w_tARkgSL7", "ALLOWED_ORIGINS": "https://konsens.cyril-62.chatgpt.site" }
+      "vars": { "ENVIRONMENT": "production", "DEMO_MODE": "false", "MONETIZATION_MODE": "contextual", "SUPABASE_URL": "https://mxuevsspybxoovsutsbs.supabase.co", "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_Xs7hyyDA2XUkbwXGGfSE2w_tARkgSL7", "ALLOWED_ORIGINS": "https://konsens.cyril-62.chatgpt.site,http://localhost:3000" }
     }
   }
 }
