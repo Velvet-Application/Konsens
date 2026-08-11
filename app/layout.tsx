@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "./finance-shell.css";
 import "./experience-v2.css";
+import "./worlds-v3.css";
 import "./monetization.css";
 
 const geist = Geist({ variable: "--font-geist", subsets: ["latin"] });
