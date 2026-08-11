@@ -8,7 +8,7 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
-            Color.konsensBackground.ignoresSafeArea()
+            WorldBackdrop(tab: store.selectedTab).ignoresSafeArea()
             if store.isLoading {
                 ProgressView().tint(Color.konsensGreen)
             } else if !store.isAuthenticated {
@@ -34,9 +34,11 @@ struct RootView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .animation(.easeInOut(duration: 0.32), value: store.selectedTab)
         .onChange(of: store.isAuthenticated) { _, authenticated in
             if !authenticated { unlocked = false; biometricAttempted = false }
         }
+        .onOpenURL { route($0) }
         .task {
             if store.isAuthenticated && store.onboardingComplete && !biometricAttempted { unlock() }
         }
@@ -64,6 +66,17 @@ struct RootView: View {
         }
     }
 
+    private func route(_ url: URL) {
+        let destination = (url.host ?? url.path.replacingOccurrences(of: "/", with: "")).lowercased()
+        switch destination {
+        case "play": store.selectedTab = .play
+        case "invest", "finance": store.selectedTab = .invest
+        case "learn", "academy": store.selectedTab = .learn
+        case "profile": store.selectedTab = .profile
+        default: store.selectedTab = .wealth
+        }
+    }
+
     private func unlock() {
         biometricAttempted = true
         let context = LAContext()
@@ -79,14 +92,70 @@ struct RootView: View {
     }
 }
 
+private struct WorldBackdrop: View {
+    let tab: AppTab
+
+    var body: some View {
+        ZStack {
+            base
+            if tab == .play {
+                RadialGradient(colors: [Color.konsensViolet.opacity(0.26), .clear], center: .topTrailing, startRadius: 0, endRadius: 420)
+                RadialGradient(colors: [Color.konsensGreen.opacity(0.08), .clear], center: .bottomLeading, startRadius: 0, endRadius: 360)
+                Circle().stroke(Color.konsensViolet.opacity(0.12), lineWidth: 1).frame(width: 310, height: 310).offset(x: 180, y: -320)
+                Circle().stroke(Color.konsensGreen.opacity(0.08), lineWidth: 1).frame(width: 220, height: 220).offset(x: 150, y: -290)
+            } else if tab == .invest {
+                FinanceGrid().opacity(0.48)
+                LinearGradient(colors: [Color.konsensBlue.opacity(0.08), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
+            } else if tab == .learn {
+                RadialGradient(colors: [Color.konsensGold.opacity(0.12), .clear], center: .topTrailing, startRadius: 0, endRadius: 360)
+                RadialGradient(colors: [Color(red: 0.25, green: 0.48, blue: 0.39).opacity(0.10), .clear], center: .bottomLeading, startRadius: 0, endRadius: 300)
+            }
+        }
+    }
+
+    private var base: Color {
+        switch tab {
+        case .play: Color(red: 0.035, green: 0.027, blue: 0.075)
+        case .invest: Color(red: 0.018, green: 0.035, blue: 0.047)
+        case .learn: Color(red: 0.039, green: 0.055, blue: 0.045)
+        default: Color.konsensBackground
+        }
+    }
+}
+
+private struct FinanceGrid: View {
+    var body: some View {
+        Canvas { context, size in
+            var path = Path()
+            let step: CGFloat = 34
+            var x: CGFloat = 0
+            while x < size.width {
+                path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: size.height)); x += step
+            }
+            var y: CGFloat = 0
+            while y < size.height {
+                path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: size.width, y: y)); y += step
+            }
+            context.stroke(path, with: .color(Color.konsensBlue.opacity(0.08)), lineWidth: 0.5)
+        }
+    }
+}
+
 private struct FloatingHeader: View {
     @EnvironmentObject private var store: AppStore
+
     var body: some View {
-        HStack {
+        HStack(spacing: 8) {
             KonsensMark(compact: true)
                 .padding(8)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.08)))
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: headerRadius, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: headerRadius).stroke(accent.opacity(0.16)))
+            Text(universeName)
+                .font(.system(size: 7, weight: .black, design: store.selectedTab == .invest ? .monospaced : .rounded))
+                .tracking(1.1)
+                .foregroundStyle(accent)
+                .padding(.horizontal, 9).padding(.vertical, 7)
+                .background(accent.opacity(0.08), in: Capsule())
             Spacer()
             Button { store.selectedTab = .profile } label: {
                 VStack(alignment: .trailing, spacing: 1) {
@@ -103,15 +172,24 @@ private struct FloatingHeader: View {
                     }
                 }
                 .padding(.horizontal, 13).padding(.vertical, 9)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.08)))
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: headerRadius, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: headerRadius).stroke(accent.opacity(0.14)))
             }.buttonStyle(.plain)
         }
     }
+
+    private var accent: Color {
+        switch store.selectedTab { case .play: Color.konsensViolet; case .invest: Color.konsensBlue; case .learn: Color.konsensGold; default: Color.konsensGreen }
+    }
+    private var universeName: String {
+        switch store.selectedTab { case .play: "PLAY"; case .invest: "FINANCE"; case .learn: "ACADEMY"; case .wealth: "KONSENS"; case .profile: "KONSENS" }
+    }
+    private var headerRadius: CGFloat { store.selectedTab == .invest ? 10 : 16 }
 }
 
 private struct FloatingDock: View {
     @EnvironmentObject private var store: AppStore
+
     var body: some View {
         HStack(spacing: 3) {
             ForEach(AppTab.allCases, id: \.self) { tab in
@@ -120,17 +198,21 @@ private struct FloatingDock: View {
                         Image(systemName: tab.symbol).font(.system(size: 16, weight: .semibold))
                         Text(tab.title).font(.system(size: 7, weight: .semibold))
                     }
-                    .foregroundStyle(store.selectedTab == tab ? Color.konsensGreen : Color.konsensMuted)
+                    .foregroundStyle(store.selectedTab == tab ? activeAccent : Color.konsensMuted)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
-                    .background(store.selectedTab == tab ? Color.konsensGreen.opacity(0.09) : Color.clear, in: RoundedRectangle(cornerRadius: 14))
+                    .background(store.selectedTab == tab ? activeAccent.opacity(0.10) : Color.clear, in: RoundedRectangle(cornerRadius: store.selectedTab == .invest ? 8 : 14))
                 }.buttonStyle(.plain)
             }
         }
         .padding(5)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.white.opacity(0.08)))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: store.selectedTab == .invest ? 14 : 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: store.selectedTab == .invest ? 14 : 22).stroke(activeAccent.opacity(0.15)))
         .shadow(color: Color.black.opacity(0.35), radius: 26, y: 14)
+    }
+
+    private var activeAccent: Color {
+        switch store.selectedTab { case .play: Color.konsensViolet; case .invest: Color.konsensBlue; case .learn: Color.konsensGold; default: Color.konsensGreen }
     }
 }
 
