@@ -8,6 +8,7 @@ import "./play-ultimate.css";
 import "./finance-ultimate.css";
 import "./network-v2.css";
 import "./journey-v3.css";
+import "./labs-v3.css";
 import "./monetization.css";
 
 const geist=Geist({variable:"--font-geist",subsets:["latin"]});const mono=Geist_Mono({variable:"--font-mono",subsets:["latin"]});
