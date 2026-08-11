@@ -18,9 +18,10 @@ struct Market: Identifiable, Hashable, Decodable {
     let suggestedStakeMax: Int?
     let volumeKoins: Double
     let openInterestKoins: Double
+    let tags: [String]
 
-    init(id: UUID, category: String, question: String, yesProbability: Int, movement: Int = 0, closesAt: String, resolutionRules: String = "", sourceType: String = "manual", sourceURLs: [String] = [], sourceTitles: [String] = [], sourceSummary: String? = nil, aiConfidence: Double? = nil, aiRationale: String? = nil, suggestedStakeMin: Int? = nil, suggestedStakeMax: Int? = nil, volumeKoins: Double = 0, openInterestKoins: Double = 0) {
-        self.id = id; self.category = category; self.question = question; self.yesProbability = yesProbability; self.movement = movement; self.closesAt = closesAt; self.resolutionRules = resolutionRules; self.sourceType = sourceType; self.sourceURLs = sourceURLs; self.sourceTitles = sourceTitles; self.sourceSummary = sourceSummary; self.aiConfidence = aiConfidence; self.aiRationale = aiRationale; self.suggestedStakeMin = suggestedStakeMin; self.suggestedStakeMax = suggestedStakeMax; self.volumeKoins = volumeKoins; self.openInterestKoins = openInterestKoins
+    init(id: UUID, category: String, question: String, yesProbability: Int, movement: Int = 0, closesAt: String, resolutionRules: String = "", sourceType: String = "manual", sourceURLs: [String] = [], sourceTitles: [String] = [], sourceSummary: String? = nil, aiConfidence: Double? = nil, aiRationale: String? = nil, suggestedStakeMin: Int? = nil, suggestedStakeMax: Int? = nil, volumeKoins: Double = 0, openInterestKoins: Double = 0, tags: [String] = []) {
+        self.id = id; self.category = category; self.question = question; self.yesProbability = yesProbability; self.movement = movement; self.closesAt = closesAt; self.resolutionRules = resolutionRules; self.sourceType = sourceType; self.sourceURLs = sourceURLs; self.sourceTitles = sourceTitles; self.sourceSummary = sourceSummary; self.aiConfidence = aiConfidence; self.aiRationale = aiRationale; self.suggestedStakeMin = suggestedStakeMin; self.suggestedStakeMax = suggestedStakeMax; self.volumeKoins = volumeKoins; self.openInterestKoins = openInterestKoins; self.tags = tags
     }
 }
 
@@ -179,5 +180,5 @@ struct RealityComparison: Identifiable, Hashable {
 enum AppTab: String, CaseIterable {
     case wealth, play, invest, learn, profile
     var title: String { switch self { case .wealth: "Patrimoine"; case .play: "Jouer"; case .invest: "Investir"; case .learn: "Apprendre"; case .profile: "Profil" } }
-    var symbol: String { switch self { case .wealth: "house.fill"; case .play: "play.fill"; case .invest: "chart.line.uptrend.xyaxis"; case .learn: "book.fill"; case .profile: "person.crop.circle.fill" } }
+    var symbol: String { switch self { case .wealth: "house.fill"; case .play: "bolt.fill"; case .invest: "chart.line.uptrend.xyaxis"; case .learn: "book.closed.fill"; case .profile: "person.crop.circle.fill" } }
 }
