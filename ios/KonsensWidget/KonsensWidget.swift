@@ -23,14 +23,14 @@ struct KonsensWidgetIntent: WidgetConfigurationIntent {
     var universe: WidgetUniverse
 }
 
-private struct WidgetMarket: Codable, Hashable {
+struct WidgetMarket: Codable, Hashable {
     let question: String
     let category: String
     let probability: Int
     let volume: Int
 }
 
-private struct WidgetAsset: Codable, Hashable {
+struct WidgetAsset: Codable, Hashable {
     let symbol: String
     let name: String
     let price: Double
