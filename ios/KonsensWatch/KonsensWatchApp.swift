@@ -2,179 +2,37 @@ import Foundation
 import SwiftUI
 import WatchConnectivity
 
-struct WatchMarket: Codable, Hashable {
-    let question: String
-    let category: String
-    let probability: Int
-    let volume: Int
-    let movement: Double
+struct WatchMarket:Codable,Hashable{let question:String;let category:String;let probability:Int;let volume:Int;let movement:Double}
+struct WatchAsset:Codable,Hashable{let symbol:String;let name:String;let price:Double;let change:Double;let currency:String}
+
+final class WatchStore:NSObject,ObservableObject,WCSessionDelegate{
+    @Published var wealth=1000
+    @Published var performance=0.0
+    @Published var score=0
+    @Published var archetype="Profil en construction"
+    @Published var dailyTitle="Ton Konsens du jour"
+    @Published var dailyNext="Ouvre Konsens sur iPhone"
+    @Published var dailyProgress=0
+    @Published var markets:[WatchMarket]=[]
+    @Published var assets:[WatchAsset]=[]
+    @Published var updated:Date?
+
+    override init(){super.init();if WCSession.isSupported(){WCSession.default.delegate=self;WCSession.default.activate()}}
+    func session(_ session:WCSession,activationDidCompleteWith activationState:WCSessionActivationState,error:Error?){}
+    func session(_ session:WCSession,didReceiveApplicationContext applicationContext:[String:Any]){apply(applicationContext)}
+    private func apply(_ context:[String:Any]){DispatchQueue.main.async{self.wealth=context["wealth"] as? Int ?? self.wealth;self.performance=context["performance"] as? Double ?? self.performance;self.score=context["score"] as? Int ?? self.score;self.archetype=context["archetype"] as? String ?? self.archetype;self.dailyTitle=context["dailyTitle"] as? String ?? self.dailyTitle;self.dailyNext=context["dailyNext"] as? String ?? self.dailyNext;self.dailyProgress=context["dailyProgress"] as? Int ?? self.dailyProgress;if let data=context["markets"] as? Data{self.markets=(try? JSONDecoder().decode([WatchMarket].self,from:data)) ?? self.markets};if let data=context["assets"] as? Data{self.assets=(try? JSONDecoder().decode([WatchAsset].self,from:data)) ?? self.assets};if let stamp=context["updated"] as? Double,stamp>0{self.updated=Date(timeIntervalSince1970:stamp)}}}
 }
 
-struct WatchAsset: Codable, Hashable {
-    let symbol: String
-    let name: String
-    let price: Double
-    let change: Double
-    let currency: String
-}
+@main struct KonsensWatchApp:App{@StateObject private var store=WatchStore();var body:some Scene{WindowGroup{WatchHome().environmentObject(store)}}}
 
-final class WatchStore: NSObject, ObservableObject, WCSessionDelegate {
-    @Published var wealth = 1000
-    @Published var performance = 0.0
-    @Published var markets: [WatchMarket] = []
-    @Published var assets: [WatchAsset] = []
-    @Published var updated: Date?
-
-    override init() {
-        super.init()
-        if WCSession.isSupported() {
-            WCSession.default.delegate = self
-            WCSession.default.activate()
-        }
-    }
-
-    func session(
-        _ session: WCSession,
-        activationDidCompleteWith activationState: WCSessionActivationState,
-        error: Error?
-    ) {}
-
-    func session(
-        _ session: WCSession,
-        didReceiveApplicationContext applicationContext: [String: Any]
-    ) {
-        apply(applicationContext)
-    }
-
-    private func apply(_ context: [String: Any]) {
-        DispatchQueue.main.async {
-            self.wealth = context["wealth"] as? Int ?? self.wealth
-            self.performance = context["performance"] as? Double ?? self.performance
-
-            if let data = context["markets"] as? Data {
-                self.markets = (try? JSONDecoder().decode([WatchMarket].self, from: data)) ?? self.markets
-            }
-            if let data = context["assets"] as? Data {
-                self.assets = (try? JSONDecoder().decode([WatchAsset].self, from: data)) ?? self.assets
-            }
-            if let stamp = context["updated"] as? Double, stamp > 0 {
-                self.updated = Date(timeIntervalSince1970: stamp)
-            }
-        }
-    }
-}
-
-@main
-struct KonsensWatchApp: App {
-    @StateObject private var store = WatchStore()
-
-    var body: some Scene {
-        WindowGroup {
-            WatchHome()
-                .environmentObject(store)
-        }
-    }
-}
-
-struct WatchHome: View {
-    @EnvironmentObject private var store: WatchStore
-
-    var body: some View {
-        ZStack {
-            Color(red: 0.025, green: 0.045, blue: 0.065)
-                .ignoresSafeArea()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Image("KonsensLogo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 30, height: 30)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text("KONSENS")
-                                .font(.caption2.bold())
-                            Text("LIVE")
-                                .font(.system(size: 7, weight: .black))
-                                .foregroundStyle(.mint)
-                        }
-                        Spacer()
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("PATRIMOINE")
-                            .font(.system(size: 7, weight: .bold))
-                            .foregroundStyle(.secondary)
-                        Text("\(store.wealth) K")
-                            .font(.title2.monospacedDigit().bold())
-                        Text(String(format: "%+.1f%%", store.performance))
-                            .font(.caption2.bold())
-                            .foregroundStyle(store.performance >= 0 ? Color.green : Color.red)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(9)
-                    .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
-
-                    if let market = store.markets.first {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("PLAY")
-                                    .font(.system(size: 7, weight: .black))
-                                    .foregroundStyle(.purple)
-                                Spacer()
-                                Text("\(market.probability)% OUI")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(.mint)
-                            }
-                            Text(market.question)
-                                .font(.system(size: 10, weight: .semibold))
-                                .lineLimit(3)
-                            HStack {
-                                Text(String(format: "%+.1f pt", market.movement))
-                                    .font(.system(size: 7))
-                                    .foregroundStyle(market.movement >= 0 ? Color.green : Color.red)
-                                Spacer()
-                                Text("\(market.volume) K")
-                                    .font(.system(size: 7))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(9)
-                        .background(Color.purple.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-                    }
-
-                    if let asset = store.assets.first {
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text("FINANCE")
-                                    .font(.system(size: 7, weight: .black))
-                                    .foregroundStyle(.blue)
-                                Text(asset.symbol)
-                                    .font(.caption.bold())
-                                Text(asset.price.formatted(.number.precision(.fractionLength(2))))
-                                    .font(.headline.monospacedDigit())
-                            }
-                            Spacer()
-                            Text(String(format: "%+.1f%%", asset.change))
-                                .font(.caption.bold())
-                                .foregroundStyle(asset.change >= 0 ? Color.green : Color.red)
-                        }
-                        .padding(9)
-                        .background(Color.blue.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
-                    }
-
-                    Text(
-                        store.updated.map {
-                            "Mis à jour \($0.formatted(date: .omitted, time: .shortened))"
-                        } ?? "Ouvre Konsens sur iPhone pour synchroniser"
-                    )
-                    .font(.system(size: 7))
-                    .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 4)
-            }
-        }
-    }
+struct WatchHome:View{
+    @EnvironmentObject private var store:WatchStore
+    var body:some View{ZStack{Color(red:0.025,green:0.045,blue:0.065).ignoresSafeArea();ScrollView{VStack(alignment:.leading,spacing:10){
+        HStack{Image("KonsensLogo").resizable().scaledToFit().frame(width:30,height:30).clipShape(RoundedRectangle(cornerRadius:8));VStack(alignment:.leading,spacing:0){Text("KONSENS").font(.caption2.bold());Text("AUJOURD’HUI").font(.system(size:7,weight:.black)).foregroundStyle(.mint)};Spacer()}
+        VStack(alignment:.leading,spacing:6){HStack(alignment:.firstTextBaseline){Text("\(store.score)").font(.system(size:32,weight:.black,design:.rounded)).foregroundStyle(.mint);Text("/100").font(.caption2).foregroundStyle(.secondary);Spacer();Text("\(store.dailyProgress)%").font(.caption.monospacedDigit().bold())};Text(store.archetype).font(.caption2.bold());ProgressView(value:Double(store.dailyProgress),total:100).tint(.mint);Text(store.dailyTitle).font(.system(size:9,weight:.bold));Text(store.dailyNext).font(.system(size:9)).foregroundStyle(.secondary).lineLimit(3)}.padding(10).background(Color.mint.opacity(0.07),in:RoundedRectangle(cornerRadius:13))
+        VStack(alignment:.leading,spacing:3){Text("MES KOINS").font(.system(size:7,weight:.bold)).foregroundStyle(.secondary);HStack{Text("\(store.wealth) K").font(.headline.monospacedDigit().bold());Spacer();Text(String(format:"%+.1f%%",store.performance)).font(.caption2.bold()).foregroundStyle(store.performance>=0 ? Color.green:Color.red)}}.padding(9).background(Color.white.opacity(0.04),in:RoundedRectangle(cornerRadius:11))
+        if let market=store.markets.first{VStack(alignment:.leading,spacing:4){HStack{Text("PRÉDIRE").font(.system(size:7,weight:.black)).foregroundStyle(.purple);Spacer();Text("\(market.probability)% OUI").font(.caption.bold()).foregroundStyle(.mint)};Text(market.question).font(.system(size:9,weight:.semibold)).lineLimit(2);HStack{Text(String(format:"%+.1f pt",market.movement)).font(.system(size:7)).foregroundStyle(market.movement>=0 ? Color.green:Color.red);Spacer();Text("\(market.volume) K").font(.system(size:7)).foregroundStyle(.secondary)}}.padding(9).background(Color.purple.opacity(0.07),in:RoundedRectangle(cornerRadius:11))}
+        if let asset=store.assets.first{HStack{VStack(alignment:.leading){Text("DÉCIDER").font(.system(size:7,weight:.black)).foregroundStyle(.blue);Text(asset.symbol).font(.caption.bold());Text(asset.price.formatted(.number.precision(.fractionLength(2)))).font(.headline.monospacedDigit())};Spacer();Text(String(format:"%+.1f%%",asset.change)).font(.caption.bold()).foregroundStyle(asset.change>=0 ? Color.green:Color.red)}.padding(9).background(Color.blue.opacity(0.06),in:RoundedRectangle(cornerRadius:11))}
+        Text(store.updated.map{"Mis à jour \($0.formatted(date:.omitted,time:.shortened))"} ?? "Ouvre Konsens sur iPhone pour synchroniser").font(.system(size:7)).foregroundStyle(.secondary)
+    }.padding(.horizontal,4)}}}
 }

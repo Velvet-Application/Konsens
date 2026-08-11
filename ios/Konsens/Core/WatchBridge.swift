@@ -22,6 +22,11 @@ final class WatchBridge: NSObject, WCSessionDelegate {
         var context: [String: Any] = [
             "wealth": defaults.integer(forKey: "konsens_widget_wealth"),
             "performance": defaults.double(forKey: "konsens_widget_performance"),
+            "score": defaults.integer(forKey: "konsens_widget_score"),
+            "archetype": defaults.string(forKey: "konsens_widget_archetype") ?? "Profil en construction",
+            "dailyTitle": defaults.string(forKey: "konsens_widget_daily_title") ?? "Ton Konsens du jour",
+            "dailyNext": defaults.string(forKey: "konsens_widget_daily_next") ?? "Ouvre Konsens sur iPhone",
+            "dailyProgress": defaults.integer(forKey: "konsens_widget_daily_progress"),
             "updated": defaults.double(forKey: "konsens_widget_updated")
         ]
         if let markets = defaults.data(forKey: "konsens_widget_markets") { context["markets"] = markets }
