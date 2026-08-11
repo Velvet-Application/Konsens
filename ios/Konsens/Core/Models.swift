@@ -7,21 +7,20 @@ struct Market: Identifiable, Hashable, Decodable {
     let yesProbability: Int
     let movement: Int
     let closesAt: String
+    let resolutionRules: String
+    let sourceType: String
+    let sourceURLs: [String]
+    let sourceTitles: [String]
+    let sourceSummary: String?
+    let aiConfidence: Double?
+    let aiRationale: String?
+    let suggestedStakeMin: Int?
+    let suggestedStakeMax: Int?
+    let volumeKoins: Double
+    let openInterestKoins: Double
 
-    enum CodingKeys: String, CodingKey {
-        case id, category, question
-        case yesProbability = "yes_probability"
-        case movement
-        case closesAt = "closes_at"
-    }
-
-    init(id: UUID, category: String, question: String, yesProbability: Int, movement: Int = 0, closesAt: String) {
-        self.id = id
-        self.category = category
-        self.question = question
-        self.yesProbability = yesProbability
-        self.movement = movement
-        self.closesAt = closesAt
+    init(id: UUID, category: String, question: String, yesProbability: Int, movement: Int = 0, closesAt: String, resolutionRules: String = "", sourceType: String = "manual", sourceURLs: [String] = [], sourceTitles: [String] = [], sourceSummary: String? = nil, aiConfidence: Double? = nil, aiRationale: String? = nil, suggestedStakeMin: Int? = nil, suggestedStakeMax: Int? = nil, volumeKoins: Double = 0, openInterestKoins: Double = 0) {
+        self.id = id; self.category = category; self.question = question; self.yesProbability = yesProbability; self.movement = movement; self.closesAt = closesAt; self.resolutionRules = resolutionRules; self.sourceType = sourceType; self.sourceURLs = sourceURLs; self.sourceTitles = sourceTitles; self.sourceSummary = sourceSummary; self.aiConfidence = aiConfidence; self.aiRationale = aiRationale; self.suggestedStakeMin = suggestedStakeMin; self.suggestedStakeMax = suggestedStakeMax; self.volumeKoins = volumeKoins; self.openInterestKoins = openInterestKoins
     }
 }
 
@@ -38,7 +37,35 @@ struct AssetQuote: Identifiable, Hashable {
     let symbol: String
     let name: String
     let kind: String
+    let currency: String
+    let externalRef: String
     let price: Double
+
+    init(id: UUID, symbol: String, name: String, kind: String, currency: String = "USD", externalRef: String = "", price: Double) {
+        self.id = id; self.symbol = symbol; self.name = name; self.kind = kind; self.currency = currency; self.externalRef = externalRef; self.price = price
+    }
+}
+
+struct LessonChapter: Codable, Hashable {
+    let title: String
+    let body: String
+    let example: String?
+    let callout: String?
+}
+
+struct LessonMedia: Codable, Hashable {
+    let type: String
+    let kind: String?
+    let title: String
+    let url: String?
+    let source: String?
+}
+
+struct LessonQuiz: Codable, Hashable {
+    let question: String
+    let choices: [String]
+    let answer: Int
+    let explanation: String
 }
 
 struct LearningLesson: Identifiable, Hashable {
@@ -47,6 +74,34 @@ struct LearningLesson: Identifiable, Hashable {
     let summary: String
     let concept: String
     let xpReward: Int
+    let position: Int
+    let category: String
+    let durationMinutes: Int
+    let riskNote: String?
+    let level: String
+    let objectives: [String]
+    let takeaways: [String]
+    let chapters: [LessonChapter]
+    let media: [LessonMedia]
+    let quiz: [LessonQuiz]
+}
+
+struct MarketPoint: Identifiable, Hashable {
+    let id = UUID()
+    let time: Date
+    let price: Double
+}
+
+struct LiveMarketQuote: Hashable {
+    let symbol: String
+    let currency: String
+    let exchange: String
+    let price: Double
+    let previousClose: Double
+    let changePct: Double
+    let updatedAt: String
+    let provider: String
+    let points: [MarketPoint]
 }
 
 struct Position: Identifiable {
@@ -95,11 +150,7 @@ struct PublicWallet: Identifiable, Hashable {
     let displayName: String
     let confidenceScore: Int
     let observableValueEUR: Double?
-
-    var shortAddress: String {
-        guard address.count > 12 else { return address }
-        return "\(address.prefix(6))…\(address.suffix(4))"
-    }
+    var shortAddress: String { guard address.count > 12 else { return address }; return "\(address.prefix(6))…\(address.suffix(4))" }
 }
 
 struct WalletEvent: Identifiable, Hashable {
@@ -112,16 +163,7 @@ struct WalletEvent: Identifiable, Hashable {
     let estimatedValueEUR: Double?
     let blockTime: String?
     let explorerURL: String?
-
-    var eventLabel: String {
-        switch eventType {
-        case "swap": "Échange"
-        case "defi_deposit": "Dépôt DeFi"
-        case "defi_withdrawal": "Retrait DeFi"
-        case "transfer": "Transfert"
-        default: "Mouvement"
-        }
-    }
+    var eventLabel: String { switch eventType { case "swap": "Échange"; case "defi_deposit": "Dépôt DeFi"; case "defi_withdrawal": "Retrait DeFi"; case "transfer": "Transfert"; default: "Mouvement" } }
 }
 
 struct RealityComparison: Identifiable, Hashable {
@@ -131,30 +173,11 @@ struct RealityComparison: Identifiable, Hashable {
     let networkFeesEUR: Double
     let slippageEUR: Double
     let comparedAt: String
-
     var deltaEUR: Double { realMarketValueEUR - simulatedValueEUR - networkFeesEUR - slippageEUR }
 }
 
 enum AppTab: String, CaseIterable {
     case wealth, play, invest, learn, profile
-
-    var title: String {
-        switch self {
-        case .wealth: "Patrimoine"
-        case .play: "Jouer"
-        case .invest: "Investir"
-        case .learn: "Apprendre"
-        case .profile: "Profil"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .wealth: "house.fill"
-        case .play: "play.fill"
-        case .invest: "chart.line.uptrend.xyaxis"
-        case .learn: "book.fill"
-        case .profile: "person.crop.circle.fill"
-        }
-    }
+    var title: String { switch self { case .wealth: "Patrimoine"; case .play: "Jouer"; case .invest: "Investir"; case .learn: "Apprendre"; case .profile: "Profil" } }
+    var symbol: String { switch self { case .wealth: "house.fill"; case .play: "play.fill"; case .invest: "chart.line.uptrend.xyaxis"; case .learn: "book.fill"; case .profile: "person.crop.circle.fill" } }
 }
