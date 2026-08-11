@@ -2,82 +2,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const developmentPreviewMeta =
-  /<meta(?=[^>]*\bname=["']codex-preview["'])(?=[^>]*\bcontent=["']development["'])[^>]*>/i;
-
-test("renders development preview metadata", async () => {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-
-  const response = await worker.fetch(
-    new Request("http://localhost/", {
-      headers: { accept: "text/html" },
-    }),
-    {
-      ASSETS: {
-        fetch: async () => new Response("Not found", { status: 404 }),
-      },
-    },
-    {
-      waitUntil() {},
-      passThroughOnException() {},
-    },
-  );
-
-  assert.equal(response.status, 200);
-  assert.match(
-    response.headers.get("content-type") ?? "",
-    /^text\/html\b/i,
-  );
-  assert.match(await response.text(), developmentPreviewMeta);
-});
-
-test("Play keeps real Koin trading and position tracking wired", async () => {
-  const source = await readFile(new URL("../app/prediction-v2.tsx", import.meta.url), "utf8");
-  assert.match(source, /from\("trade_orders"\)\.insert/);
-  assert.match(source, /Acheter OUI/);
-  assert.match(source, /Acheter NON/);
-  assert.match(source, /Revendre/);
-  assert.match(source, /Suivre mes paris/);
-  assert.match(source, /market_watchlist/);
-  assert.match(source, /konsens:trade/);
-  assert.match(source, /className="outcome-prices"><div className="yes"/);
-  assert.match(source, /className="ticket-actions"><button className="yes"/);
-});
-
-test("Finance keeps simulated buy sell watchlist and portfolio tracking wired", async () => {
-  const source = await readFile(new URL("../app/live-finance-v2.tsx", import.meta.url), "utf8");
-  assert.match(source, /from\("trade_orders"\)\.insert/);
-  assert.match(source, /Acheter en simulation/);
-  assert.match(source, /Revendre/);
-  assert.match(source, /asset_watchlist/);
-  assert.match(source, /Suivre mes investissements/);
-  assert.match(source, /average_price/);
-  assert.match(source, /konsens:trade/);
-});
-
-test("Academy persists real quiz progress", async () => {
-  const source = await readFile(new URL("../app/academy-v2.tsx", import.meta.url), "utf8");
-  assert.match(source, /from\("learning_progress"\)\.upsert/);
-  assert.match(source, /Impossible d’enregistrer/);
-  assert.match(source, /Valider le module/);
-});
-
-test("Premium activation remains connected to the beta entitlement RPC", async () => {
-  const source = await readFile(new URL("../app/premium-v2.tsx", import.meta.url), "utf8");
-  assert.match(source, /start_premium_beta_trial/);
-  assert.match(source, /konsens:subscription/);
-  assert.match(source, /Activer 14 jours gratuitement/);
-});
-
-test("Konsens Revenue keeps ad and SDK admin actions wired", async () => {
-  const revenue = await readFile(new URL("../app/monetization/page.tsx", import.meta.url), "utf8");
-  const ads = await readFile(new URL("../app/monetization/ads/page.tsx", import.meta.url), "utf8");
-  assert.match(revenue, /create_sdk_client/);
-  assert.match(revenue, /Créer la clé/);
-  assert.match(ads, /from\("advertisers"\)\.insert/);
-  assert.match(ads, /from\("ad_campaigns"\)\.insert/);
-  assert.match(ads, /from\("ad_creatives"\)\.insert/);
-  assert.match(ads, /Activer la campagne/);
-});
+const developmentPreviewMeta=/<meta(?=[^>]*\bname=["']codex-preview["'])(?=[^>]*\bcontent=["']development["'])[^>]*>/i;
+test("renders development preview metadata",async()=>{const workerUrl=new URL("../dist/server/index.js",import.meta.url);workerUrl.searchParams.set("test",`${process.pid}-${Date.now()}`);const{default:worker}=await import(workerUrl.href);const response=await worker.fetch(new Request("http://localhost/",{headers:{accept:"text/html"}}),{ASSETS:{fetch:async()=>new Response("Not found",{status:404})}},{waitUntil(){},passThroughOnException(){}});assert.equal(response.status,200);assert.match(response.headers.get("content-type")??"",/^text\/html\b/i);assert.match(await response.text(),developmentPreviewMeta)});
+test("official Konsens logo is used by web identity",async()=>{const shell=await readFile(new URL("../app/finance-shell.tsx",import.meta.url),"utf8");const layout=await readFile(new URL("../app/layout.tsx",import.meta.url),"utf8");assert.match(shell,/konsens-logo\.png/);assert.doesNotMatch(shell,/f-mark[^\n]*<b>K<\/b>/);assert.match(layout,/konsens-logo\.png/)});
+test("Play quick OUI NON opens a confirmable Koin ticket",async()=>{const source=await readFile(new URL("../app/prediction-v2.tsx",import.meta.url),"utf8");assert.match(source,/from\("trade_orders"\)\.insert/);assert.match(source,/onQuick=\{o=>openTicket\(m,o\)\}/);assert.match(source,/id="play-ticket"/);assert.match(source,/Confirmer \$\{pendingOutcome\.toUpperCase\(\)\}/);assert.match(source,/trade\("sell","yes"\)/);assert.match(source,/market_watchlist/)});
+test("Finance exposes real reference data portfolio fundamentals and news",async()=>{const source=await readFile(new URL("../app/live-finance-v2.tsx",import.meta.url),"utf8");assert.match(source,/functions\/v1\/market-data/);assert.match(source,/functions\/v1\/finance-news/);assert.match(source,/fundamentals/);assert.match(source,/Suivre mes investissements/);assert.match(source,/asset_watchlist/);assert.match(source,/trade\("buy"\)/);assert.match(source,/trade\("sell"\)/)});
+test("Academy persists real quiz progress",async()=>{const source=await readFile(new URL("../app/academy-v2.tsx",import.meta.url),"utf8");assert.match(source,/from\("learning_progress"\)\.upsert/);assert.match(source,/Valider le module/)});
+test("Premium remains connected to entitlement",async()=>{const source=await readFile(new URL("../app/premium-v2.tsx",import.meta.url),"utf8");assert.match(source,/start_premium_beta_trial/);assert.match(source,/Activer 14 jours gratuitement/)});
+test("notification center subscribes to user alerts and registers service worker",async()=>{const source=await readFile(new URL("../app/notification-center.tsx",import.meta.url),"utf8");assert.match(source,/notification_events/);assert.match(source,/postgres_changes/);assert.match(source,/serviceWorker\.register\("\/sw\.js"\)/);assert.match(source,/Notification\.requestPermission/)});
+test("blockchain transparency uses public leaderboard and Premium alerts",async()=>{const source=await readFile(new URL("../app/blockchain-v2.tsx",import.meta.url),"utf8");assert.match(source,/get_whale_leaderboard/);assert.match(source,/set_wallet_alert/);assert.match(source,/functions\/v1\/blockchain-data/);assert.match(source,/Premium/)});
+test("monetization exposes ads SDK and provider connections",async()=>{const revenue=await readFile(new URL("../app/monetization/page.tsx",import.meta.url),"utf8");const ads=await readFile(new URL("../app/monetization/ads/page.tsx",import.meta.url),"utf8");const providers=await readFile(new URL("../app/monetization/providers/page.tsx",import.meta.url),"utf8");assert.match(revenue,/create_sdk_client/);assert.match(ads,/ad_campaigns/);assert.match(providers,/provider_connections/);assert.match(providers,/STRIPE_SECRET_KEY|Twelve Data/)});

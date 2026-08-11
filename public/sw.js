@@ -1,0 +1,4 @@
+self.addEventListener("install",()=>self.skipWaiting());
+self.addEventListener("activate",event=>event.waitUntil(self.clients.claim()));
+self.addEventListener("notificationclick",event=>{event.notification.close();const route=event.notification?.data?.route||"";const target=route==="play"?"/?konsens=play":route==="finance"?"/?konsens=invest":"/?konsens=profile";event.waitUntil(self.clients.matchAll({type:"window",includeUncontrolled:true}).then(clients=>{for(const client of clients){if("focus" in client){client.navigate(target);return client.focus()}}return self.clients.openWindow(target)}))});
+self.addEventListener("push",event=>{let data={title:"Konsens",body:"Nouvelle alerte",route:""};try{data={...data,...event.data.json()}}catch{}event.waitUntil(self.registration.showNotification(data.title,{body:data.body,icon:"/konsens-logo.png",badge:"/konsens-logo.png",tag:data.tag||"konsens-live",data:{route:data.route}}))});
