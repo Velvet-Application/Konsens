@@ -21,7 +21,7 @@ jobs:
           status=$?
           cat eslint.log
           if [ "$status" -ne 0 ]; then
-            tail -80 eslint.log | while IFS= read -r line; do
+            tail -100 eslint.log | while IFS= read -r line; do
               line=${line//'%'/'%25'}; line=${line//$'\r'/'%0D'}; line=${line//$'\n'/'%0A'}; echo "::error::$line"
             done
             exit "$status"
@@ -41,7 +41,7 @@ jobs:
           cat xcodebuild.log
           if [ "$app_status" -ne 0 ]; then
             echo "---- actionable Xcode errors ----"
-            grep -n -E "(^|[[:space:]])error:|fatal error:|Command SwiftCompile failed|BUILD FAILED|The following build commands failed" xcodebuild.log | tail -180 | while IFS= read -r line; do
+            grep -n -E "(^|[[:space:]])error:|fatal error:|Command SwiftCompile failed|BUILD FAILED|The following build commands failed" xcodebuild.log | tail -200 | while IFS= read -r line; do
               line=${line//'%'/'%25'}; line=${line//$'\r'/'%0D'}; line=${line//$'\n'/'%0A'}; echo "::error::$line"
             done
             exit 1
@@ -70,6 +70,14 @@ jobs:
           test -f supabase/migrations/20260811082806_v2_notifications_whales_monetization.sql
           test -f supabase/migrations/20260811083239_v2_real_public_wallet_registry.sql
           test -f supabase/migrations/20260811083331_v2_finance_asset_profiles.sql
+          test -f supabase/migrations/20260811130826_v3_pedagogical_journey_core.sql
+          test -f supabase/migrations/20260811131107_v3_league_access_and_profile_cards.sql
+          test -f supabase/migrations/20260811131741_v3_automatic_decision_journal.sql
+          test -f supabase/migrations/20260811131851_v3_consensus_initial_probability.sql
+          test -f supabase/migrations/20260811133839_v3_profile_card_badges_fix.sql
+          grep -q "get_my_daily_journey" supabase/migrations/20260811130826_v3_pedagogical_journey_core.sql
+          grep -q "get_my_konsens_score" supabase/migrations/20260811130826_v3_pedagogical_journey_core.sql
+          grep -q "decision_journal" supabase/migrations/20260811131741_v3_automatic_decision_journal.sql
           if grep -R -n -E "sb_secret_[A-Za-z0-9_-]+|SUPABASE_SERVICE_ROLE_KEY[[:space:]]*=[[:space:]]*['\"]?[A-Za-z0-9]" supabase cloudflare ios app; then
             echo "::error::A runtime Supabase secret appears to be committed."
             exit 1
