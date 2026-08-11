@@ -8,6 +8,7 @@ final class AppStore: ObservableObject {
     @Published var onboardingComplete = false
     @Published var isLoading = true
     @Published var username = "Konsens"
+    @Published var role = "user"
     @Published var subscriptionTier = "free"
     @Published var wealth = WealthSnapshot()
     @Published var credits = 0
@@ -46,155 +47,103 @@ final class AppStore: ObservableObject {
     }
 
     func completeProfile(username: String, firstName: String, lastName: String, birthDate: Date) async throws {
-        struct Update: Encodable {
-            let username: String
-            let first_name: String
-            let last_name: String
-            let birth_date: String
-            let onboarding_completed_at: String
-            let journey_mode: String
-        }
+        struct Update: Encodable { let username: String; let first_name: String; let last_name: String; let birth_date: String; let onboarding_completed_at: String; let journey_mode: String }
         let day = DateFormatter(); day.dateFormat = "yyyy-MM-dd"
-        let update = Update(
-            username: username,
-            first_name: firstName,
-            last_name: lastName,
-            birth_date: day.string(from: birthDate),
-            onboarding_completed_at: ISO8601DateFormatter().string(from: Date()),
-            journey_mode: "balanced"
-        )
+        let update = Update(username: username, first_name: firstName, last_name: lastName, birth_date: day.string(from: birthDate), onboarding_completed_at: ISO8601DateFormatter().string(from: Date()), journey_mode: "balanced")
         guard let id = supabase.auth.currentUser?.id else { return }
         try await supabase.from("profiles").update(update).eq("id", value: id).execute()
-        onboardingComplete = true
-        self.username = username
-        await refreshFinance()
+        onboardingComplete = true; self.username = username; await refreshFinance()
     }
 
     func loadProfile() async {
         guard let id = supabase.auth.currentUser?.id else { return }
-        struct Row: Decodable {
-            let username: String
-            let onboarding_completed_at: String?
-            let subscription_tier: String
-            let streak_days: Int
-        }
-        if let row: Row = try? await supabase.from("profiles")
-            .select("username,onboarding_completed_at,subscription_tier,streak_days")
-            .eq("id", value: id)
-            .single()
-            .execute().value {
-            onboardingComplete = row.onboarding_completed_at != nil
-            username = row.username
-            subscriptionTier = row.subscription_tier
-            streak = row.streak_days
+        _ = try? await supabase.rpc("refresh_my_premium_status").execute()
+        struct Row: Decodable { let username: String; let role: String; let onboarding_completed_at: String?; let subscription_tier: String; let streak_days: Int }
+        if let row: Row = try? await supabase.from("profiles").select("username,role,onboarding_completed_at,subscription_tier,streak_days").eq("id", value: id).single().execute().value {
+            onboardingComplete = row.onboarding_completed_at != nil; username = row.username; role = row.role; subscriptionTier = row.subscription_tier; streak = row.streak_days
         }
         await refreshFinance()
     }
 
     func refreshFinance() async {
         guard supabase.auth.currentUser != nil else { return }
-
-        struct WealthRow: Decodable {
-            let cash_value: Double
-            let investments_value: Double
-            let bets_value: Double
-            let total_value: Double
-        }
-        if let rows: [WealthRow] = try? await supabase.rpc("get_my_wealth_snapshot").execute().value,
-           let row = rows.first {
-            wealth = WealthSnapshot(cash: row.cash_value, investments: row.investments_value, bets: row.bets_value, total: row.total_value)
-            credits = Int(row.cash_value.rounded(.down))
+        struct WealthRow: Decodable { let cash_value: Double; let investments_value: Double; let bets_value: Double; let total_value: Double }
+        if let rows: [WealthRow] = try? await supabase.rpc("get_my_wealth_snapshot").execute().value, let row = rows.first {
+            wealth = WealthSnapshot(cash: row.cash_value, investments: row.investments_value, bets: row.bets_value, total: row.total_value); credits = Int(row.cash_value.rounded(.down))
         }
 
         struct RawMarket: Decodable {
-            let id: UUID
-            let category: String
-            let question: String
-            let yes_probability: Double
-            let closes_at: String
+            let id: UUID; let category: String; let question: String; let yes_probability: Double; let closes_at: String; let resolution_rules: String
+            let source_type: String; let source_urls: [String]; let source_titles: [String]; let source_summary: String?; let ai_confidence: Double?; let ai_rationale: String?
+            let suggested_stake_min: Int?; let suggested_stake_max: Int?; let volume_koins: Double; let open_interest_koins: Double
         }
-        if let rows: [RawMarket] = try? await supabase.from("markets")
-            .select("id,category,question,yes_probability,closes_at")
-            .eq("status", value: "open")
-            .order("closes_at")
-            .limit(12)
-            .execute().value {
-            markets = rows.map { Market(id: $0.id, category: $0.category, question: $0.question, yesProbability: Int(($0.yes_probability * 100).rounded()), closesAt: $0.closes_at) }
+        if let rows: [RawMarket] = try? await supabase.from("markets").select("id,category,question,yes_probability,closes_at,resolution_rules,source_type,source_urls,source_titles,source_summary,ai_confidence,ai_rationale,suggested_stake_min,suggested_stake_max,volume_koins,open_interest_koins").eq("status", value: "open").order("created_at", ascending: false).limit(30).execute().value {
+            markets = rows.map { Market(id: $0.id, category: $0.category, question: $0.question, yesProbability: Int(($0.yes_probability * 100).rounded()), closesAt: $0.closes_at, resolutionRules: $0.resolution_rules, sourceType: $0.source_type, sourceURLs: $0.source_urls, sourceTitles: $0.source_titles, sourceSummary: $0.source_summary, aiConfidence: $0.ai_confidence, aiRationale: $0.ai_rationale, suggestedStakeMin: $0.suggested_stake_min, suggestedStakeMax: $0.suggested_stake_max, volumeKoins: $0.volume_koins, openInterestKoins: $0.open_interest_koins) }
         }
 
-        struct RawAsset: Decodable { let id: UUID; let symbol: String; let name: String; let kind: String }
+        struct RawAsset: Decodable { let id: UUID; let symbol: String; let name: String; let kind: String; let currency: String; let external_ref: String }
         struct PriceRow: Decodable { let price: Double }
-        if let rows: [RawAsset] = try? await supabase.from("assets")
-            .select("id,symbol,name,kind")
-            .eq("is_active", value: true)
-            .order("symbol")
-            .execute().value {
+        if let rows: [RawAsset] = try? await supabase.from("assets").select("id,symbol,name,kind,currency,external_ref").eq("is_active", value: true).like("external_ref", pattern: "market:%").order("symbol").execute().value {
             var quotes: [AssetQuote] = []
             for asset in rows {
-                let priceRow: PriceRow? = try? await supabase.from("price_history")
-                    .select("price")
-                    .eq("asset_id", value: asset.id)
-                    .order("observed_at", ascending: false)
-                    .limit(1)
-                    .single()
-                    .execute().value
-                quotes.append(AssetQuote(id: asset.id, symbol: asset.symbol, name: asset.name, kind: asset.kind, price: priceRow?.price ?? 0))
+                let priceRow: PriceRow? = try? await supabase.from("price_history").select("price").eq("asset_id", value: asset.id).order("observed_at", ascending: false).limit(1).single().execute().value
+                quotes.append(AssetQuote(id: asset.id, symbol: asset.symbol, name: asset.name, kind: asset.kind, currency: asset.currency, externalRef: asset.external_ref, price: priceRow?.price ?? 0))
             }
             assets = quotes
         }
 
-        struct RawLesson: Decodable { let id: UUID; let title: String; let summary: String; let concept: String; let xp_reward: Int }
-        if let rows: [RawLesson] = try? await supabase.from("learning_modules")
-            .select("id,title,summary,concept,xp_reward")
-            .eq("is_active", value: true)
-            .order("position")
-            .execute().value {
-            lessons = rows.map { LearningLesson(id: $0.id, title: $0.title, summary: $0.summary, concept: $0.concept, xpReward: $0.xp_reward) }
+        struct RawLesson: Decodable {
+            let id: UUID; let title: String; let summary: String; let concept: String; let xp_reward: Int; let position: Int; let category: String; let duration_minutes: Int; let risk_note: String?; let level: String
+            let learning_objectives: [String]; let key_takeaways: [String]; let content_json: [LessonChapter]; let media_json: [LessonMedia]; let quiz_json: [LessonQuiz]
+        }
+        if let rows: [RawLesson] = try? await supabase.from("learning_modules").select("id,title,summary,concept,xp_reward,position,category,duration_minutes,risk_note,level,learning_objectives,key_takeaways,content_json,media_json,quiz_json").eq("is_active", value: true).order("position").execute().value {
+            lessons = rows.map { LearningLesson(id: $0.id, title: $0.title, summary: $0.summary, concept: $0.concept, xpReward: $0.xp_reward, position: $0.position, category: $0.category, durationMinutes: $0.duration_minutes, riskNote: $0.risk_note, level: $0.level, objectives: $0.learning_objectives, takeaways: $0.key_takeaways, chapters: $0.content_json, media: $0.media_json, quiz: $0.quiz_json) }
         }
     }
 
-    func buyAsset(_ asset: AssetQuote, amount: Int) async {
-        await placeOrder(assetID: asset.id, marketID: nil, outcome: nil, amount: amount)
-    }
-
-    func bet(_ market: Market, outcome: String, amount: Int) async {
-        await placeOrder(assetID: nil, marketID: market.id, outcome: outcome, amount: amount)
-    }
-
-    private func placeOrder(assetID: UUID?, marketID: UUID?, outcome: String?, amount: Int) async {
-        guard let id = supabase.auth.currentUser?.id else { return }
-        struct Order: Encodable {
-            let user_id: UUID
-            let asset_id: UUID?
-            let market_id: UUID?
-            let side: String
-            let outcome: String?
-            let credits: Int
-            let idempotency_key: UUID
-        }
+    func liveQuote(for asset: AssetQuote, range: String = "1mo") async -> LiveMarketQuote? {
+        let marketSymbol = asset.externalRef.replacingOccurrences(of: "market:", with: "")
+        guard var components = URLComponents(string: "https://mxuevsspybxoovsutsbs.supabase.co/functions/v1/market-data") else { return nil }
+        components.queryItems = [URLQueryItem(name: "symbol", value: marketSymbol), URLQueryItem(name: "range", value: range), URLQueryItem(name: "interval", value: range == "1d" ? "15m" : "1d")]
+        guard let url = components.url else { return nil }
         do {
-            let order = Order(user_id: id, asset_id: assetID, market_id: marketID, side: "buy", outcome: outcome, credits: amount, idempotency_key: UUID())
-            try await supabase.from("trade_orders").insert(order).execute()
-            showToast(assetID == nil ? "Pari en Koins enregistré" : "Investissement simulé exécuté")
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+            struct PointRow: Decodable { let t: Double; let price: Double }
+            struct QuoteRow: Decodable { let symbol: String; let currency: String; let exchange: String; let price: Double; let previousClose: Double; let changePct: Double; let updatedAt: String; let points: [PointRow]; let provider: String }
+            struct Envelope: Decodable { let quote: QuoteRow }
+            let decoded = try JSONDecoder().decode(Envelope.self, from: data)
+            return LiveMarketQuote(symbol: decoded.quote.symbol, currency: decoded.quote.currency, exchange: decoded.quote.exchange, price: decoded.quote.price, previousClose: decoded.quote.previousClose, changePct: decoded.quote.changePct, updatedAt: decoded.quote.updatedAt, provider: decoded.quote.provider, points: decoded.quote.points.map { MarketPoint(time: Date(timeIntervalSince1970: $0.t), price: $0.price) })
+        } catch { return nil }
+    }
+
+    func buyAsset(_ asset: AssetQuote, amount: Int) async { _ = await liveQuote(for: asset, range: "5d"); await placeOrder(assetID: asset.id, marketID: nil, outcome: nil, amount: amount, side: "buy") }
+    func sellAsset(_ asset: AssetQuote, amount: Int) async { _ = await liveQuote(for: asset, range: "5d"); await placeOrder(assetID: asset.id, marketID: nil, outcome: nil, amount: amount, side: "sell") }
+    func bet(_ market: Market, outcome: String, amount: Int) async { await placeOrder(assetID: nil, marketID: market.id, outcome: outcome, amount: amount, side: "buy") }
+    func sellBet(_ market: Market, outcome: String, amount: Int) async { await placeOrder(assetID: nil, marketID: market.id, outcome: outcome, amount: amount, side: "sell") }
+
+    private func placeOrder(assetID: UUID?, marketID: UUID?, outcome: String?, amount: Int, side: String) async {
+        guard let id = supabase.auth.currentUser?.id else { return }
+        struct Order: Encodable { let user_id: UUID; let asset_id: UUID?; let market_id: UUID?; let side: String; let outcome: String?; let credits: Int; let idempotency_key: UUID }
+        do {
+            let order = Order(user_id: id, asset_id: assetID, market_id: marketID, side: side, outcome: outcome, credits: amount, idempotency_key: UUID())
+            struct Result: Decodable { let status: String; let rejection_reason: String? }
+            let result: Result = try await supabase.from("trade_orders").insert(order).select("status,rejection_reason").single().execute().value
+            if result.status != "executed" { showToast(result.rejection_reason ?? "Ordre refusé"); return }
+            showToast(side == "sell" ? "Revente simulée exécutée" : (assetID == nil ? "Pari en Koins enregistré" : "Investissement simulé exécuté"))
             await refreshFinance()
-        } catch {
-            showToast("Ordre refusé · vérifie ton solde")
-        }
+        } catch { showToast("Ordre refusé · vérifie ton solde ou ta position") }
     }
 
-    func signOut() async {
-        try? await supabase.auth.signOut()
-        isAuthenticated = false
-        onboardingComplete = false
-        wealth = WealthSnapshot()
-        credits = 0
+    func startPremiumTrial() async {
+        do {
+            _ = try await supabase.rpc("start_premium_beta_trial").execute()
+            subscriptionTier = "premium"
+            showToast("Premium bêta activé · publicité supprimée")
+            await loadProfile()
+        } catch { showToast("Activation Premium indisponible") }
     }
 
-    func showToast(_ message: String) {
-        toast = message
-        Task {
-            try? await Task.sleep(for: .seconds(2))
-            if toast == message { toast = nil }
-        }
-    }
+    func signOut() async { try? await supabase.auth.signOut(); isAuthenticated = false; onboardingComplete = false; wealth = WealthSnapshot(); credits = 0 }
+    func showToast(_ message: String) { toast = message; Task { try? await Task.sleep(for: .seconds(2)); if toast == message { toast = nil } } }
 }
