@@ -11,6 +11,10 @@ const eslintConfig = defineConfig([
       "app/live-finance-v2.tsx",
       "app/notification-center.tsx",
       "app/prediction-v2.tsx",
+      "app/today-v3.tsx",
+      "app/decision-reflection.tsx",
+      "app/consensus-v3.tsx",
+      "app/what-if-v3.tsx",
       "supabase/functions/**/*.ts",
     ],
     rules: {
