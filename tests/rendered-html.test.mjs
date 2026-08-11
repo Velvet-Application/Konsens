@@ -42,7 +42,8 @@ test("Play keeps real Koin trading and position tracking wired", async () => {
   assert.match(source, /Suivre mes paris/);
   assert.match(source, /market_watchlist/);
   assert.match(source, /konsens:trade/);
-  assert.doesNotMatch(source, /outcome-prices[^\n]*<button className="yes"/);
+  assert.match(source, /className="outcome-prices"><div className="yes"/);
+  assert.match(source, /className="ticket-actions"><button className="yes"/);
 });
 
 test("Finance keeps simulated buy sell watchlist and portfolio tracking wired", async () => {
