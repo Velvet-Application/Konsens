@@ -1,5 +1,6 @@
 import Foundation
 import Supabase
+import WidgetKit
 
 @MainActor
 final class AppStore: ObservableObject {
@@ -75,10 +76,10 @@ final class AppStore: ObservableObject {
         struct RawMarket: Decodable {
             let id: UUID; let category: String; let question: String; let yes_probability: Double; let closes_at: String; let resolution_rules: String
             let source_type: String; let source_urls: [String]; let source_titles: [String]; let source_summary: String?; let ai_confidence: Double?; let ai_rationale: String?
-            let suggested_stake_min: Int?; let suggested_stake_max: Int?; let volume_koins: Double; let open_interest_koins: Double
+            let suggested_stake_min: Int?; let suggested_stake_max: Int?; let volume_koins: Double; let open_interest_koins: Double; let tags: [String]
         }
-        if let rows: [RawMarket] = try? await supabase.from("markets").select("id,category,question,yes_probability,closes_at,resolution_rules,source_type,source_urls,source_titles,source_summary,ai_confidence,ai_rationale,suggested_stake_min,suggested_stake_max,volume_koins,open_interest_koins").eq("status", value: "open").order("created_at", ascending: false).limit(30).execute().value {
-            markets = rows.map { Market(id: $0.id, category: $0.category, question: $0.question, yesProbability: Int(($0.yes_probability * 100).rounded()), closesAt: $0.closes_at, resolutionRules: $0.resolution_rules, sourceType: $0.source_type, sourceURLs: $0.source_urls, sourceTitles: $0.source_titles, sourceSummary: $0.source_summary, aiConfidence: $0.ai_confidence, aiRationale: $0.ai_rationale, suggestedStakeMin: $0.suggested_stake_min, suggestedStakeMax: $0.suggested_stake_max, volumeKoins: $0.volume_koins, openInterestKoins: $0.open_interest_koins) }
+        if let rows: [RawMarket] = try? await supabase.from("markets").select("id,category,question,yes_probability,closes_at,resolution_rules,source_type,source_urls,source_titles,source_summary,ai_confidence,ai_rationale,suggested_stake_min,suggested_stake_max,volume_koins,open_interest_koins,tags").eq("status", value: "open").order("created_at", ascending: false).limit(60).execute().value {
+            markets = rows.map { Market(id: $0.id, category: $0.category, question: $0.question, yesProbability: Int(($0.yes_probability * 100).rounded()), closesAt: $0.closes_at, resolutionRules: $0.resolution_rules, sourceType: $0.source_type, sourceURLs: $0.source_urls, sourceTitles: $0.source_titles, sourceSummary: $0.source_summary, aiConfidence: $0.ai_confidence, aiRationale: $0.ai_rationale, suggestedStakeMin: $0.suggested_stake_min, suggestedStakeMax: $0.suggested_stake_max, volumeKoins: $0.volume_koins, openInterestKoins: $0.open_interest_koins, tags: $0.tags) }
         }
 
         struct RawAsset: Decodable { let id: UUID; let symbol: String; let name: String; let kind: String; let currency: String; let external_ref: String }
@@ -99,6 +100,7 @@ final class AppStore: ObservableObject {
         if let rows: [RawLesson] = try? await supabase.from("learning_modules").select("id,title,summary,concept,xp_reward,position,category,duration_minutes,risk_note,level,learning_objectives,key_takeaways,content_json,media_json,quiz_json").eq("is_active", value: true).order("position").execute().value {
             lessons = rows.map { LearningLesson(id: $0.id, title: $0.title, summary: $0.summary, concept: $0.concept, xpReward: $0.xp_reward, position: $0.position, category: $0.category, durationMinutes: $0.duration_minutes, riskNote: $0.risk_note, level: $0.level, objectives: $0.learning_objectives, takeaways: $0.key_takeaways, chapters: $0.content_json, media: $0.media_json, quiz: $0.quiz_json) }
         }
+        Task { await syncWidgetSnapshot() }
     }
 
     func liveQuote(for asset: AssetQuote, range: String = "1mo") async -> LiveMarketQuote? {
@@ -130,9 +132,44 @@ final class AppStore: ObservableObject {
             struct Result: Decodable { let status: String; let rejection_reason: String? }
             let result: Result = try await supabase.from("trade_orders").insert(order).select("status,rejection_reason").single().execute().value
             if result.status != "executed" { showToast(result.rejection_reason ?? "Ordre refusé"); return }
-            showToast(side == "sell" ? "Revente simulée exécutée" : (assetID == nil ? "Pari en Koins enregistré" : "Investissement simulé exécuté"))
+            showToast(side == "sell" ? "Revente simulée exécutée" : (assetID == nil ? "Position Play enregistrée" : "Investissement simulé exécuté"))
             await refreshFinance()
         } catch { showToast("Ordre refusé · vérifie ton solde ou ta position") }
+    }
+
+    private func syncWidgetSnapshot() async {
+        struct WidgetMarket: Codable { let question: String; let category: String; let probability: Int; let volume: Int }
+        struct WidgetAsset: Codable { let symbol: String; let name: String; let price: Double; let change: Double; let currency: String }
+        guard let defaults = UserDefaults(suiteName: "group.com.konsens.beta") else { return }
+        defaults.set(Int(wealth.total.rounded()), forKey: "konsens_widget_wealth")
+        defaults.set(wealth.performance, forKey: "konsens_widget_performance")
+
+        let rankedMarkets = markets.sorted {
+            let left = ($0.tags.contains("featured") ? 100000 : 0) + Int($0.volumeKoins)
+            let right = ($1.tags.contains("featured") ? 100000 : 0) + Int($1.volumeKoins)
+            return left > right
+        }.prefix(3).map { WidgetMarket(question: $0.question, category: $0.category, probability: $0.yesProbability, volume: Int($0.volumeKoins)) }
+        if let data = try? JSONEncoder().encode(Array(rankedMarkets)) { defaults.set(data, forKey: "konsens_widget_markets") }
+
+        var preferredAssets = assets
+        if let userID = supabase.auth.currentUser?.id {
+            struct PositionRow: Decodable { let asset_id: UUID? }
+            let rows: [PositionRow] = (try? await supabase.from("positions").select("asset_id").eq("user_id", value: userID).not("asset_id", operator: .is, value: "null").execute().value) ?? []
+            let positionIDs = Set(rows.compactMap(\.asset_id))
+            let positioned = assets.filter { positionIDs.contains($0.id) }
+            if !positioned.isEmpty { preferredAssets = positioned + assets.filter { !positionIDs.contains($0.id) } }
+        }
+        var widgetAssets: [WidgetAsset] = []
+        for asset in preferredAssets.prefix(3) {
+            if let quote = await liveQuote(for: asset, range: "5d") {
+                widgetAssets.append(WidgetAsset(symbol: asset.symbol, name: asset.name, price: quote.price, change: quote.changePct, currency: quote.currency))
+            } else {
+                widgetAssets.append(WidgetAsset(symbol: asset.symbol, name: asset.name, price: asset.price, change: 0, currency: asset.currency))
+            }
+        }
+        if let data = try? JSONEncoder().encode(widgetAssets) { defaults.set(data, forKey: "konsens_widget_assets") }
+        defaults.set(Date().timeIntervalSince1970, forKey: "konsens_widget_updated")
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     func startPremiumTrial() async {
