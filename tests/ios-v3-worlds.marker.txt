@@ -1,0 +1,6 @@
+Konsens V3 iOS acceptance markers
+- PLAY world: geek / neon / Koins / consensus
+- INVEST world: serious finance / interactive chart / blockchain pulse
+- ACADEMY world: playful guided learning path
+- Shared green learning thread
+- Widget modes: Today / Play / Finance+Blockchain / Academy / Mixed
