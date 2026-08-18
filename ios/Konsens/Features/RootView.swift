@@ -192,7 +192,7 @@ private struct FloatingHeader: View {
                         .tracking(1)
                         .foregroundStyle(Color.konsensMuted)
                     HStack(spacing: 5) {
-                        Text(store.wealth.total.formatted(.number.precision(.fractionLength(0))))
+                        Text(String(format: "%.0f", store.wealth.total))
                             .font(.subheadline.monospacedDigit().bold())
                         Text("Koins").font(.system(size: 8)).foregroundStyle(Color.konsensMuted)
                         Text(String(format: "%+.1f%%", store.wealth.performance))
