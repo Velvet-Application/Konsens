@@ -1,0 +1,54 @@
+name: Fix onboarding identity
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-onboarding-identity.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Patch onboarding identity save
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('app/finance-shell.tsx')
+          source = path.read_text()
+          replacement = r'''function Onboarding({user,done}:{user:User;done:()=>void}){const[today]=useState(()=>Date.now()),[p,setP]=useState({username:"",first_name:"",last_name:"",birth_date:"",email:user.email??""}),[status,setStatus]=useState(""),[saving,setSaving]=useState(false);const age=useMemo(()=>p.birth_date?Math.floor((today-new Date(p.birth_date).getTime())/31557600000):0,[p.birth_date,today]);const save=async()=>{const username=p.username.trim(),firstName=p.first_name.trim(),lastName=p.last_name.trim();if(age<18||username.length<3||!firstName||!lastName||saving)return;setSaving(true);setStatus("");const payload={username,display_name:`${firstName} ${lastName}`,first_name:firstName,last_name:lastName,birth_date:p.birth_date,email:p.email.trim()||user.email??null,onboarding_completed_at:new Date().toISOString(),updated_at:new Date().toISOString()};const{data,error}=await supabase.from("profiles").update(payload).eq("id",user.id).select("username,first_name,last_name,birth_date,email,onboarding_completed_at").single();if(error){setStatus(error.code==="23505"?"Ce pseudo est déjà utilisé. Choisis-en un autre.":"Impossible d’enregistrer ton identité. Réessaie.");setSaving(false);return}if(!data?.onboarding_completed_at){setStatus("Ton identité n’a pas pu être confirmée. Réessaie.");setSaving(false);return}setStatus("Identité enregistrée. Tes 1 000 Koins sont prêts.");setSaving(false);done()};return <main className="finance-auth onboarding-new"><section className="auth-pitch"><Brand/><span>TON POINT DE DÉPART</span><h1>1 000 Koins.<br/><em>À toi de décider.</em></h1><p>Conserve-les, investis-les ou engage-les dans des prédictions.</p></section><section className="auth-panel"><span>PROFIL</span><h2>Créons ton identité Konsens</h2><label>Pseudo public<input value={p.username} onChange={e=>setP({...p,username:e.target.value.replace(/[^a-zA-Z0-9_]/g,"")})}/></label><div className="field-pair"><label>Prénom<input value={p.first_name} onChange={e=>setP({...p,first_name:e.target.value})}/></label><label>Nom<input value={p.last_name} onChange={e=>setP({...p,last_name:e.target.value})}/></label></div><label>Date de naissance<input type="date" value={p.birth_date} onChange={e=>setP({...p,birth_date:e.target.value})}/></label>{p.birth_date&&age<18&&<p>Konsens est actuellement réservé aux personnes majeures.</p>}<button className="primary" disabled={saving||p.username.length<3||!p.first_name.trim()||!p.last_name.trim()||age<18} onClick={()=>void save()}>{saving?"Enregistrement…":"Recevoir mes 1 000 Koins"}</button>{status&&<p role="status">{status}</p>}</section></main>}
+'''
+          updated, count = re.subn(r'function Onboarding\(\{user,done\}.*\Z', replacement, source, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit(f'Expected one Onboarding function, replaced {count}')
+          path.write_text(updated)
+
+          test_path = Path('tests/rendered-html.test.mjs')
+          tests = test_path.read_text()
+          marker = 'test("onboarding persists identity with permitted profile fields"'
+          if marker not in tests:
+              tests += '''\ntest("onboarding persists identity with permitted profile fields",async()=>{const source=await readFile(new URL("../app/finance-shell.tsx",import.meta.url),"utf8");const onboarding=source.slice(source.indexOf("function Onboarding"));assert.match(onboarding,/from\\("profiles"\\)\\.update\\(payload\\)/);assert.match(onboarding,/display_name:/);assert.match(onboarding,/onboarding_completed_at/);assert.match(onboarding,/\\.select\\("username,first_name,last_name,birth_date,email,onboarding_completed_at"\\)\\.single\\(\\)/);assert.doesNotMatch(onboarding,/journey_mode:\\"balanced\\"/);assert.match(onboarding,/Impossible d’enregistrer ton identité/);assert.match(onboarding,/saving\\?\\"Enregistrement…\\":\\"Recevoir mes 1 000 Koins\\"/)});\n'''
+              test_path.write_text(tests)
+          PY
+      - name: Install dependencies
+        run: npm ci
+      - name: Run web tests
+        run: npm test
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/finance-shell.tsx tests/rendered-html.test.mjs
+          git diff --cached --check
+          git commit -m "fix(web): persist onboarding identity before Koin grant"
+          git push origin HEAD:main
