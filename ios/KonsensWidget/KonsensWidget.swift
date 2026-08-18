@@ -8,7 +8,7 @@ enum WidgetUniverse: String, AppEnum {
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Univers Konsens")
     static var caseDisplayRepresentations: [WidgetUniverse: DisplayRepresentation] = [
         .play: "Jouer",
-        .finance: "Investir",
+        .finance: "Investir + Blockchain",
         .learn: "Apprendre",
         .mixed: "Les 3 univers"
     ]
@@ -16,7 +16,7 @@ enum WidgetUniverse: String, AppEnum {
 
 struct KonsensWidgetIntent: WidgetConfigurationIntent {
     static var title: LocalizedStringResource = "Univers du widget"
-    static var description = IntentDescription("Choisis Jouer, Investir, Apprendre ou les trois univers Konsens.")
+    static var description = IntentDescription("Choisis Jouer, Investir + Blockchain, Apprendre ou les trois univers Konsens.")
 
     @Parameter(title: "Afficher", default: WidgetUniverse.mixed)
     var universe: WidgetUniverse
@@ -43,6 +43,9 @@ struct KonsensWidgetEntry: TimelineEntry {
     let configuration: KonsensWidgetIntent
     let wealth: Int
     let performance: Double
+    let chainFlow: Double
+    let chainWallet: String
+    let chainProvider: String
     let markets: [WidgetMarket]
     let assets: [WidgetAsset]
 }
@@ -54,6 +57,9 @@ struct KonsensWidgetProvider: AppIntentTimelineProvider {
             configuration: KonsensWidgetIntent(),
             wealth: 1000,
             performance: 0,
+            chainFlow: 125000,
+            chainWallet: "Ethereum public",
+            chainProvider: "Blockscout",
             markets: [.init(question: "Bitcoin dépassera-t-il son prochain seuil ?", category: "Crypto", probability: 51, volume: 0, movement: 2.4)],
             assets: [.init(symbol: "BTC", name: "Bitcoin", price: 58240, change: 1.3, currency: "EUR")]
         )
@@ -71,6 +77,9 @@ struct KonsensWidgetProvider: AppIntentTimelineProvider {
         let defaults = UserDefaults(suiteName: "group.com.konsens.beta")
         let wealth = defaults?.integer(forKey: "konsens_widget_wealth") ?? 1000
         let performance = defaults?.double(forKey: "konsens_widget_performance") ?? 0
+        let chainFlow = defaults?.double(forKey: "konsens_widget_chain_flow") ?? 0
+        let chainWallet = defaults?.string(forKey: "konsens_widget_chain_wallet") ?? "Ethereum public"
+        let chainProvider = defaults?.string(forKey: "konsens_widget_chain_provider") ?? "Blockchain"
         let marketData = defaults?.data(forKey: "konsens_widget_markets")
         let assetData = defaults?.data(forKey: "konsens_widget_assets")
         let markets = marketData.flatMap { try? JSONDecoder().decode([WidgetMarket].self, from: $0) } ?? []
@@ -80,6 +89,9 @@ struct KonsensWidgetProvider: AppIntentTimelineProvider {
             configuration: configuration,
             wealth: wealth == 0 ? 1000 : wealth,
             performance: performance,
+            chainFlow: chainFlow,
+            chainWallet: chainWallet,
+            chainProvider: chainProvider,
             markets: markets,
             assets: assets
         )
@@ -141,7 +153,10 @@ struct KonsensWidgetView: View {
         case .play:
             if let market = entry.markets.first { PlayRow(market: market, large: true) } else { empty("Aucun jeu suivi") }
         case .finance:
-            if let asset = entry.assets.first { FinanceRow(asset: asset, large: true) } else { empty("Marché en attente") }
+            VStack(spacing: 6) {
+                if let asset = entry.assets.first { FinanceRow(asset: asset, large: false) } else { empty("Marché en attente") }
+                ChainRow(entry: entry, compact: true)
+            }
         case .learn:
             LearnRow(large: true)
         case .mixed:
@@ -160,9 +175,14 @@ struct KonsensWidgetView: View {
             }
         case .finance:
             HStack(spacing: 8) {
-                ForEach(Array(entry.assets.prefix(3).enumerated()), id: \.offset) { _, asset in
-                    FinanceRow(asset: asset, large: false)
+                VStack(spacing: 6) {
+                    ForEach(Array(entry.assets.prefix(2).enumerated()), id: \.offset) { _, asset in
+                        FinanceRow(asset: asset, large: false)
+                    }
                 }
+                .frame(maxWidth: .infinity)
+                Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1)
+                ChainRow(entry: entry, compact: false).frame(maxWidth: .infinity)
             }
         case .learn:
             LearnRow(large: false)
@@ -196,8 +216,9 @@ struct KonsensWidgetView: View {
                         .offset(y: 18)
                 }
             case .finance:
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .font(.system(size: 11, weight: .bold))
+                Text(entry.chainFlow == 0 ? "◎" : (entry.chainFlow > 0 ? "↑" : "↓"))
+                    .font(.system(size: 11, weight: .black))
+                    .foregroundStyle(entry.chainFlow >= 0 ? Color.mint : Color.red)
                     .padding(4)
                     .background(.black.opacity(0.72), in: Circle())
                     .offset(x: 17, y: 17)
@@ -223,13 +244,14 @@ struct KonsensWidgetView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 7))
             switch universe {
             case .finance:
-                if let asset = entry.assets.first {
-                    VStack(alignment: .leading) {
-                        Text(asset.symbol).font(.caption.bold())
-                        Text(String(format: "%+.1f%%", asset.change))
-                            .font(.caption2)
-                            .foregroundStyle(asset.change >= 0 ? Color.green : Color.red)
+                VStack(alignment: .leading, spacing: 1) {
+                    if let asset = entry.assets.first {
+                        Text("\(asset.symbol)  \(String(format: "%+.1f%%", asset.change))").font(.caption.bold())
+                    } else {
+                        Text("INVESTIR").font(.caption.bold())
                     }
+                    Text(entry.chainFlow == 0 ? "On-chain en attente" : "On-chain \(signedCompact(entry.chainFlow))")
+                        .font(.caption2).foregroundStyle(.secondary)
                 }
             case .learn:
                 VStack(alignment: .leading, spacing: 1) {
@@ -255,8 +277,8 @@ struct KonsensWidgetView: View {
             switch universe {
             case .finance:
                 if let asset = entry.assets.first {
-                    Text("Konsens · \(asset.symbol) \(String(format: "%+.1f%%", asset.change))")
-                } else { Text("Konsens Finance") }
+                    Text("Konsens · \(asset.symbol) \(String(format: "%+.1f%%", asset.change)) · On-chain \(signedCompact(entry.chainFlow))")
+                } else { Text("Konsens Finance · On-chain \(signedCompact(entry.chainFlow))") }
             case .learn:
                 Text("Konsens · comprendre avant de risquer")
             case .play:
@@ -285,7 +307,7 @@ struct KonsensWidgetView: View {
     private var modeTitle: String {
         switch universe {
         case .play: "PLAY · JOUER"
-        case .finance: "FINANCE · INVESTIR"
+        case .finance: "FINANCE · ON-CHAIN"
         case .learn: "ACADEMY · APPRENDRE"
         case .mixed: "3 UNIVERS · 1 APPRENTISSAGE"
         }
@@ -315,7 +337,7 @@ struct KonsensWidgetView: View {
             case .play:
                 RadialGradient(colors: [Color.purple.opacity(0.20), .clear], center: .topTrailing, startRadius: 0, endRadius: 170)
             case .finance:
-                LinearGradient(colors: [Color.blue.opacity(0.09), .clear], startPoint: .bottomLeading, endPoint: .topTrailing)
+                LinearGradient(colors: [Color.blue.opacity(0.09), Color.mint.opacity(0.025), .clear], startPoint: .bottomLeading, endPoint: .topTrailing)
             case .learn:
                 RadialGradient(colors: [Color.mint.opacity(0.10), Color.yellow.opacity(0.035), .clear], center: .topTrailing, startRadius: 0, endRadius: 180)
             case .mixed:
@@ -329,6 +351,38 @@ struct KonsensWidgetView: View {
 
     private func empty(_ text: String) -> some View {
         Text(text).font(.caption).foregroundStyle(.secondary)
+    }
+
+    private func signedCompact(_ value: Double) -> String {
+        let sign = value > 0 ? "+" : ""
+        return sign + value.formatted(.number.notation(.compactName).precision(.fractionLength(0))) + "€"
+    }
+}
+
+private struct ChainRow: View {
+    let entry: KonsensWidgetEntry
+    let compact: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Circle().fill(Color.mint).frame(width: 5, height: 5)
+                Text("ON-CHAIN").font(.system(size: 6, weight: .black, design: .monospaced)).foregroundStyle(.mint)
+                Spacer()
+            }
+            Text(entry.chainFlow == 0 ? "Flux en attente" : signed(entry.chainFlow))
+                .font(.system(size: compact ? 9 : 13, weight: .bold, design: .monospaced))
+                .foregroundStyle(entry.chainFlow >= 0 ? Color.mint : Color.red)
+            Text(entry.chainWallet).font(.system(size: 6)).foregroundStyle(.secondary).lineLimit(1)
+            if !compact { Text(entry.chainProvider).font(.system(size: 6)).foregroundStyle(.secondary).lineLimit(1) }
+        }
+        .padding(8)
+        .background(Color.mint.opacity(0.055), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func signed(_ value: Double) -> String {
+        let sign = value > 0 ? "+" : ""
+        return sign + value.formatted(.number.notation(.compactName).precision(.fractionLength(0))) + "€ net"
     }
 }
 
@@ -477,7 +531,7 @@ struct KonsensWidget: Widget {
             KonsensWidgetView(entry: entry)
         }
         .configurationDisplayName("Konsens · 3 univers")
-        .description("Jouer, investir et apprendre avec un même fil conducteur financier.")
+        .description("Jouer, investir avec transparence blockchain et apprendre avec un même fil conducteur financier.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
 }
