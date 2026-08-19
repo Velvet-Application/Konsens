@@ -8,7 +8,12 @@ struct KonsensApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(store)
-                .onOpenURL { url in Task { try? await store.supabase.auth.session(from: url) } }
+                .task {
+                    await KonsensPrivacyConsentManager.shared.gatherConsent()
+                }
+                .onOpenURL { url in
+                    Task { try? await store.supabase.auth.session(from: url) }
+                }
         }
     }
 }
