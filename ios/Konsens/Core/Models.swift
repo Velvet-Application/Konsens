@@ -130,12 +130,31 @@ struct Position: Identifiable {
 }
 
 struct Leader: Identifiable {
-    let id = UUID()
+    let id: UUID
     let rank: Int
     let name: String
     let initials: String
     let score: Double
     let isCurrentUser: Bool
+
+    init(id: UUID = UUID(), rank: Int, name: String, initials: String, score: Double, isCurrentUser: Bool) {
+        self.id = id
+        self.rank = rank
+        self.name = name
+        self.initials = initials
+        self.score = score
+        self.isCurrentUser = isCurrentUser
+    }
+}
+
+struct LeagueReaction: Identifiable, Hashable {
+    let id: Int64
+    let actorID: UUID
+    let actorUsername: String
+    let targetID: UUID
+    let targetUsername: String
+    let reaction: String
+    let createdAt: Date
 }
 
 struct SponsoredAd: Identifiable, Hashable {
@@ -193,7 +212,30 @@ struct RealityComparison: Identifiable, Hashable {
 }
 
 enum AppTab: String, CaseIterable {
-    case wealth, play, invest, learn, profile
-    var title: String { switch self { case .wealth: "Patrimoine"; case .play: "Jouer"; case .invest: "Investir"; case .learn: "Apprendre"; case .profile: "Profil" } }
-    var symbol: String { switch self { case .wealth: "house.fill"; case .play: "bolt.fill"; case .invest: "chart.line.uptrend.xyaxis"; case .learn: "book.closed.fill"; case .profile: "person.crop.circle.fill" } }
+    case wealth, play, invest, league, learn, profile
+
+    static let gameTabs: [AppTab] = [.wealth, .play, .invest, .league, .profile]
+    static let financeTabs: [AppTab] = [.wealth, .play, .invest, .learn, .profile]
+
+    var title: String {
+        switch self {
+        case .wealth: "Accueil"
+        case .play: "Miser"
+        case .invest: "Investir"
+        case .league: "Ligue"
+        case .learn: "Apprendre"
+        case .profile: "Profil"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .wealth: "gamecontroller.fill"
+        case .play: "bolt.fill"
+        case .invest: "chart.line.uptrend.xyaxis"
+        case .league: "trophy.fill"
+        case .learn: "book.closed.fill"
+        case .profile: "person.crop.circle.fill"
+        }
+    }
 }
