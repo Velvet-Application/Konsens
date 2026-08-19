@@ -8,7 +8,16 @@ struct KonsensApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(store)
-                .onOpenURL { url in Task { try? await store.supabase.auth.session(from: url) } }
+                .onOpenURL { url in
+                    Task {
+                        do {
+                            try await store.supabase.auth.session(from: url)
+                            await store.restoreSession()
+                        } catch {
+                            store.showToast("Lien de connexion invalide ou expiré")
+                        }
+                    }
+                }
         }
     }
 }
