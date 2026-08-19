@@ -39,9 +39,7 @@ async function fetchKeySet(url: string, cached: CachedKeys | null) {
   const now = Date.now();
   if (cached && now - cached.fetchedAt < CACHE_TTL_MS) return cached;
 
-  const response = await fetch(url, {
-    headers: { accept: "application/json" },
-  });
+  const response = await fetch(url, { headers: { accept: "application/json" } });
   if (!response.ok) throw new Error(`admob_key_fetch_${response.status}`);
 
   const payload = await response.json() as { keys?: GoogleKey[] };
@@ -55,12 +53,23 @@ async function fetchKeySet(url: string, cached: CachedKeys | null) {
 
 async function getProductionKey(keyId: string) {
   prodCache = await fetchKeySet(PROD_KEYS_URL, prodCache);
-  return prodCache.keys.get(keyId) ?? null;
+  let key = prodCache.keys.get(keyId) ?? null;
+  if (!key) {
+    // Google rotates keys. Refresh immediately on an unknown key rather than waiting for cache expiry.
+    prodCache = await fetchKeySet(PROD_KEYS_URL, null);
+    key = prodCache.keys.get(keyId) ?? null;
+  }
+  return key;
 }
 
 async function getTestKey(keyId: string) {
   testCache = await fetchKeySet(TEST_KEYS_URL, testCache);
-  return testCache.keys.get(keyId) ?? null;
+  let key = testCache.keys.get(keyId) ?? null;
+  if (!key) {
+    testCache = await fetchKeySet(TEST_KEYS_URL, null);
+    key = testCache.keys.get(keyId) ?? null;
+  }
+  return key;
 }
 
 function parseSignedCallback(request: Request) {
@@ -71,7 +80,7 @@ function parseSignedCallback(request: Request) {
   const signatureIndex = rawQuery.indexOf(signatureMarker);
   const keyIndex = rawQuery.indexOf(keyMarker, Math.max(0, signatureIndex));
 
-  // Google requires signature and key_id to be the final two query parameters, in this order.
+  // Google's signed payload must remain byte-for-byte intact. signature and key_id are final, in that order.
   if (signatureIndex <= 0 || keyIndex <= signatureIndex || rawQuery.indexOf("&", keyIndex + keyMarker.length) !== -1) {
     throw new Error("invalid_ssv_parameter_order");
   }
@@ -82,17 +91,22 @@ function parseSignedCallback(request: Request) {
   const keyId = params.get("key_id");
   if (!signature || !keyId || !/^\d+$/.test(keyId)) throw new Error("missing_ssv_signature");
 
-  return { url, params, signedContent, signature, keyId };
+  return { params, signedContent, signature, keyId };
 }
 
 function verifySignature(signedContent: string, signature: string, pem: string) {
-  const key = createPublicKey(pem);
   return verify(
     "sha256",
     Buffer.from(signedContent, "utf8"),
-    key,
+    createPublicKey(pem),
     decodeBase64Url(signature),
   );
+}
+
+function normalizeEpochMilliseconds(timestamp: number) {
+  // AdMob documents milliseconds; tolerate higher-resolution test payloads without weakening freshness checks.
+  if (timestamp > 100_000_000_000_000) return Math.trunc(timestamp / 1_000);
+  return Math.trunc(timestamp);
 }
 
 Deno.serve(async (request) => {
@@ -106,7 +120,7 @@ Deno.serve(async (request) => {
     let pem = await getProductionKey(keyId);
     let keyEnvironment: "prod" | "test" = "prod";
 
-    // Test keys are accepted only for AdMob's callback-URL verification probe and can never grant Koins.
+    // Test keys are accepted only for AdMob's callback URL verification probe and can NEVER grant Koins.
     if (!pem && isSetupProbe) {
       pem = await getTestKey(keyId);
       keyEnvironment = "test";
@@ -120,7 +134,6 @@ Deno.serve(async (request) => {
       return json({ ok: true, mode: "setup_probe", key_environment: keyEnvironment });
     }
 
-    // From this point onward only production AdMob keys can authorize an economic mutation.
     if (keyEnvironment !== "prod") return json({ ok: false, error: "test_key_cannot_reward" }, 401);
 
     const userId = params.get("user_id");
@@ -139,13 +152,14 @@ Deno.serve(async (request) => {
       return json({ ok: false, error: "invalid_transaction_id" }, 400);
     }
 
-    const timestamp = Number(timestampText);
+    const rawTimestamp = Number(timestampText);
     const rewardAmount = Number(rewardAmountText);
-    if (!Number.isFinite(timestamp) || !Number.isFinite(rewardAmount)) {
+    if (!Number.isFinite(rawTimestamp) || !Number.isFinite(rewardAmount) || rewardAmount <= 0) {
       return json({ ok: false, error: "invalid_reward_payload" }, 400);
     }
 
-    const age = Date.now() - timestamp;
+    const timestampMs = normalizeEpochMilliseconds(rawTimestamp);
+    const age = Date.now() - timestampMs;
     if (age > MAX_REWARD_AGE_MS || age < -MAX_FUTURE_SKEW_MS) {
       return json({ ok: false, error: "stale_reward_callback" }, 400);
     }
@@ -168,7 +182,7 @@ Deno.serve(async (request) => {
       p_reward_nonce: rewardNonce,
       p_ad_unit: adUnit,
       p_transaction_id: transactionId,
-      p_timestamp: Math.trunc(timestamp),
+      p_timestamp: Math.trunc(rawTimestamp),
       p_ad_network: adNetwork,
       p_reward_item: rewardItem,
       p_reward_amount: rewardAmount,
