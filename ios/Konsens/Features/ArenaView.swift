@@ -5,63 +5,55 @@ import SwiftUI
 struct ArenaView: View {
     @EnvironmentObject private var store: AppStore
     @State private var dailyClaimable = true
-    @State private var dailyClaimed = false
     @State private var leaders: [Leader] = []
     @State private var reactions: [LeagueReaction] = []
     @State private var leagueName = "Ligue Flash"
     @State private var showRewardedAd = false
 
     private var myRank: Int { leaders.first(where: { $0.isCurrentUser })?.rank ?? 0 }
+
     private var featuredMarket: Market? {
-        let playful = store.markets.filter { !["macro", "finance", "bourse"].contains($0.category.lowercased()) }
-        return (playful.isEmpty ? store.markets : playful).first
+        let fun = store.markets.filter { !["macro", "finance", "bourse"].contains($0.category.lowercased()) }
+        return (fun.isEmpty ? store.markets : fun).first
     }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 15) {
-                GameIdentityCard(
+                PlayerHero(
                     username: store.username,
                     score: store.wealth.total,
                     rank: myRank,
-                    leagueName: leagueName,
+                    league: leagueName,
                     streak: store.streak
                 )
 
-                DailyRewardCard(claimable: dailyClaimable && !dailyClaimed) {
+                DailyDropCard(claimable: dailyClaimable) {
                     showRewardedAd = true
                 }
 
-                if let market = featuredMarket {
-                    ChallengeOfTheDayCard(market: market) {
-                        store.selectedTab = .play
-                    }
+                if let featuredMarket {
+                    DailyChallengeCard(market: featuredMarket) { store.selectedTab = .play }
                 } else {
-                    EmptyChallengeCard { store.selectedTab = .play }
+                    GameEmptyCard(
+                        icon: "bolt.fill",
+                        title: "Les prochains défis arrivent",
+                        detail: "Pop culture, sport, internet, tech et sujets du quotidien.",
+                        color: Color.konsensViolet
+                    )
                 }
 
                 HStack(spacing: 10) {
-                    GameShortcut(
-                        title: "MISER",
-                        detail: "Défie l’actualité",
-                        icon: "bolt.fill",
-                        tint: Color.konsensViolet
-                    ) { store.selectedTab = .play }
-                    GameShortcut(
-                        title: "INVESTIR",
-                        detail: "Joue le marché réel",
-                        icon: "chart.line.uptrend.xyaxis",
-                        tint: Color.konsensBlue
-                    ) { store.selectedTab = .invest }
+                    GameShortcut(title: "MISER", detail: "Défie l’actualité", icon: "bolt.fill", tint: Color.konsensViolet) {
+                        store.selectedTab = .play
+                    }
+                    GameShortcut(title: "INVESTIR", detail: "Joue le marché réel", icon: "chart.line.uptrend.xyaxis", tint: Color.konsensBlue) {
+                        store.selectedTab = .invest
+                    }
                 }
 
-                LeagueMiniCard(leaders: leaders, username: store.username) {
-                    store.selectedTab = .league
-                }
-
-                LeaguePulseCard(reactions: reactions, activity: store.playActivity) {
-                    store.selectedTab = .league
-                }
+                LeaguePreview(leaders: leaders) { store.selectedTab = .league }
+                LeaguePulse(reactions: reactions, activity: store.playActivity) { store.selectedTab = .league }
             }
             .padding(.horizontal, 16)
             .padding(.top, 104)
@@ -69,16 +61,15 @@ struct ArenaView: View {
         }
         .refreshable {
             await store.refreshFinance()
-            await refreshGameData()
+            await loadGameData()
         }
-        .task { await refreshGameData() }
+        .task { await loadGameData() }
         .sheet(isPresented: $showRewardedAd) {
             RewardedDailyAdView {
                 dailyClaimable = false
-                dailyClaimed = true
                 Task {
                     await store.refreshFinance()
-                    await refreshGameData()
+                    await loadGameData()
                 }
             }
             .environmentObject(store)
@@ -86,10 +77,8 @@ struct ArenaView: View {
     }
 
     @MainActor
-    private func refreshGameData() async {
-        let daily = await fetchDailyRewardStatus(store: store)
-        dailyClaimable = daily.claimable
-        dailyClaimed = !daily.claimable
+    private func loadGameData() async {
+        dailyClaimable = await fetchDailyRewardStatus(store: store)
         let league = await fetchLeagueBundle(store: store)
         leaders = league.leaders
         reactions = league.reactions
@@ -97,36 +86,30 @@ struct ArenaView: View {
     }
 }
 
-private struct GameIdentityCard: View {
+private struct PlayerHero: View {
     let username: String
     let score: Double
     let rank: Int
-    let leagueName: String
+    let league: String
     let streak: Int
 
     var body: some View {
         HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.konsensViolet, Color.konsensGreen],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 64, height: 64)
-                    .shadow(color: Color.konsensViolet.opacity(0.45), radius: 14)
-                Text(String(username.prefix(1)).uppercased())
-                    .font(.system(size: 27, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
-            }
+            Circle()
+                .fill(LinearGradient(colors: [Color.konsensViolet, Color.konsensGreen], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 64, height: 64)
+                .overlay(
+                    Text(String(username.prefix(1)).uppercased())
+                        .font(.system(size: 27, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                )
+                .shadow(color: Color.konsensViolet.opacity(0.42), radius: 14)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("@\(username)")
-                    .font(.headline.rounded().bold())
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
                 HStack(spacing: 6) {
-                    Text(leagueName.uppercased())
+                    Text(league.uppercased())
                         .font(.system(size: 7, weight: .black, design: .rounded))
                         .tracking(0.8)
                         .foregroundStyle(Color.konsensGold)
@@ -142,7 +125,9 @@ private struct GameIdentityCard: View {
                         .foregroundStyle(Color.konsensMuted)
                 }
             }
+
             Spacer()
+
             VStack(alignment: .trailing, spacing: 1) {
                 Text(String(format: "%.0f K", score))
                     .font(.system(size: 24, weight: .black, design: .rounded))
@@ -155,20 +140,16 @@ private struct GameIdentityCard: View {
         }
         .padding(17)
         .background(
-            LinearGradient(
-                colors: [Color.konsensViolet.opacity(0.17), Color.konsensPanelRaised.opacity(0.98)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
+            LinearGradient(colors: [Color.konsensViolet.opacity(0.17), Color.konsensPanelRaised.opacity(0.98)], startPoint: .topLeading, endPoint: .bottomTrailing),
             in: RoundedRectangle(cornerRadius: 24, style: .continuous)
         )
         .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.konsensViolet.opacity(0.22)))
     }
 }
 
-private struct DailyRewardCard: View {
+private struct DailyDropCard: View {
     let claimable: Bool
-    let collect: () -> Void
+    let action: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -187,12 +168,13 @@ private struct DailyRewardCard: View {
                     .foregroundStyle(claimable ? Color.konsensGold : Color.konsensPositive)
             }
 
-            Text(claimable ? "Ils disparaissent ce soir si tu ne les récupères pas. Une courte pub sponsorisée débloque le crédit." : "Bien joué. Le prochain drop sera disponible demain à ta prochaine connexion.")
+            Text(claimable
+                 ? "Ils disparaissent ce soir si tu ne les récupères pas. Le spot sponsorisé débloque ton crédit quotidien."
+                 : "Bien joué. Le prochain drop sera disponible demain à ta prochaine connexion.")
                 .font(.caption)
                 .foregroundStyle(Color.white.opacity(0.72))
-                .lineSpacing(2)
 
-            Button(action: collect) {
+            Button(action: action) {
                 HStack {
                     Image(systemName: claimable ? "play.rectangle.fill" : "clock.fill")
                     Text(claimable ? "COLLECTER MES 100 K" : "REVENS DEMAIN")
@@ -209,18 +191,14 @@ private struct DailyRewardCard: View {
         }
         .padding(17)
         .background(
-            LinearGradient(
-                colors: [Color.konsensGold.opacity(0.14), Color(red: 0.14, green: 0.07, blue: 0.02).opacity(0.55)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
+            LinearGradient(colors: [Color.konsensGold.opacity(0.14), Color(red: 0.14, green: 0.07, blue: 0.02).opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing),
             in: RoundedRectangle(cornerRadius: 23)
         )
         .overlay(RoundedRectangle(cornerRadius: 23).stroke(Color.konsensGold.opacity(0.25)))
     }
 }
 
-private struct ChallengeOfTheDayCard: View {
+private struct DailyChallengeCard: View {
     let market: Market
     let action: () -> Void
 
@@ -245,13 +223,10 @@ private struct ChallengeOfTheDayCard: View {
                     .multilineTextAlignment(.leading)
                     .foregroundStyle(.white)
 
-                HStack(spacing: 8) {
-                    HStack(spacing: 5) {
-                        Circle().fill(Color.konsensPositive).frame(width: 7, height: 7)
-                        Text("\(market.yesProbability)% jouent OUI")
-                    }
-                    .font(.caption2.bold())
-                    .foregroundStyle(Color.white.opacity(0.72))
+                HStack {
+                    Text("\(market.yesProbability)% jouent OUI")
+                        .font(.caption2.bold())
+                        .foregroundStyle(Color.white.opacity(0.72))
                     Spacer()
                     Label("JOUER", systemImage: "arrow.right.circle.fill")
                         .font(.caption.bold())
@@ -260,36 +235,10 @@ private struct ChallengeOfTheDayCard: View {
             }
             .padding(18)
             .background(
-                LinearGradient(
-                    colors: [Color.konsensViolet.opacity(0.23), Color.konsensGreen.opacity(0.08), Color.konsensPanel],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
+                LinearGradient(colors: [Color.konsensViolet.opacity(0.23), Color.konsensGreen.opacity(0.08), Color.konsensPanel], startPoint: .topLeading, endPoint: .bottomTrailing),
                 in: RoundedRectangle(cornerRadius: 25)
             )
             .overlay(RoundedRectangle(cornerRadius: 25).stroke(Color.konsensGreen.opacity(0.18)))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct EmptyChallengeCard: View {
-    let action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("⚡ CHALLENGES")
-                    .font(.caption.bold())
-                    .foregroundStyle(Color.konsensGreen)
-                Text("Les prochains défis arrivent.")
-                    .font(.title2.rounded().bold())
-                Text("Pop culture, sport, internet, société, tech : des questions rapides à jouer avec ta ligue.")
-                    .font(.caption)
-                    .foregroundStyle(Color.konsensMuted)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(18)
-            .background(Color.konsensViolet.opacity(0.08), in: RoundedRectangle(cornerRadius: 22))
         }
         .buttonStyle(.plain)
     }
@@ -305,14 +254,9 @@ private struct GameShortcut: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 9) {
-                Image(systemName: icon)
-                    .font(.title2.bold())
-                    .foregroundStyle(tint)
-                Text(title)
-                    .font(.headline.rounded().bold())
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundStyle(Color.konsensMuted)
+                Image(systemName: icon).font(.title2.bold()).foregroundStyle(tint)
+                Text(title).font(.system(size: 17, weight: .bold, design: .rounded))
+                Text(detail).font(.caption2).foregroundStyle(Color.konsensMuted)
             }
             .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
             .padding(15)
@@ -323,28 +267,45 @@ private struct GameShortcut: View {
     }
 }
 
-private struct LeagueMiniCard: View {
-    let leaders: [Leader]
-    let username: String
-    let open: () -> Void
+private struct GameEmptyCard: View {
+    let icon: String
+    let title: String
+    let detail: String
+    let color: Color
 
     var body: some View {
-        Button(action: open) {
+        HStack(spacing: 12) {
+            Image(systemName: icon).font(.title2).foregroundStyle(color)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 16, weight: .bold, design: .rounded))
+                Text(detail).font(.caption).foregroundStyle(Color.konsensMuted)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(17)
+        .background(color.opacity(0.07), in: RoundedRectangle(cornerRadius: 20))
+    }
+}
+
+private struct LeaguePreview: View {
+    let leaders: [Leader]
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("🏆 TA LIGUE")
                         .font(.system(size: 9, weight: .black, design: .rounded))
-                        .tracking(1)
                         .foregroundStyle(Color.konsensGold)
                     Spacer()
-                    Text("VOIR LE CLASSEMENT")
+                    Text("CLASSEMENT →")
                         .font(.system(size: 7, weight: .black, design: .rounded))
                         .foregroundStyle(Color.konsensMuted)
                 }
+
                 if leaders.isEmpty {
-                    Text("Chargement du classement…")
-                        .font(.caption)
-                        .foregroundStyle(Color.konsensMuted)
+                    Text("Chargement du classement…").font(.caption).foregroundStyle(Color.konsensMuted)
                 } else {
                     ForEach(leaders.prefix(4)) { leader in
                         HStack(spacing: 10) {
@@ -360,8 +321,7 @@ private struct LeagueMiniCard: View {
                                 .font(.subheadline.bold())
                                 .foregroundStyle(leader.isCurrentUser ? Color.konsensGreen : .white)
                             Spacer()
-                            Text(String(format: "%.0f K", leader.score))
-                                .font(.caption.monospacedDigit().bold())
+                            Text(String(format: "%.0f K", leader.score)).font(.caption.monospacedDigit().bold())
                         }
                     }
                 }
@@ -374,37 +334,32 @@ private struct LeagueMiniCard: View {
     }
 }
 
-private struct LeaguePulseCard: View {
+private struct LeaguePulse: View {
     let reactions: [LeagueReaction]
     let activity: [PlayActivity]
-    let open: () -> Void
+    let action: () -> Void
 
     var body: some View {
-        Button(action: open) {
-            VStack(alignment: .leading, spacing: 10) {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("💬 ÇA BOUGE DANS LA LIGUE")
                     .font(.system(size: 9, weight: .black, design: .rounded))
-                    .tracking(0.8)
                     .foregroundStyle(Color.konsensViolet)
+
                 if let reaction = reactions.first {
                     Text("\(reaction.actorUsername) a envoyé \(reaction.reaction) à \(reaction.targetUsername)")
-                        .font(.subheadline.rounded().bold())
-                    Text("Réponds, chambre gentiment, ou reprends ta place au classement.")
-                        .font(.caption)
-                        .foregroundStyle(Color.konsensMuted)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
                 } else if let move = activity.first {
-                    Text("Un nouveau coup vient d’être joué sur \(move.category).")
-                        .font(.subheadline.rounded().bold())
-                    Text("La ligue est en mouvement. Va voir qui prend le risque.")
-                        .font(.caption)
-                        .foregroundStyle(Color.konsensMuted)
+                    Text("Nouveau coup joué sur \(move.category).")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
                 } else {
                     Text("Sois le premier à mettre l’ambiance.")
-                        .font(.subheadline.rounded().bold())
-                    Text("Les réactions et les bons coups de ta ligue apparaîtront ici.")
-                        .font(.caption)
-                        .foregroundStyle(Color.konsensMuted)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
                 }
+
+                Text("Réactions, gros coups et dépassements font vivre ta ligue.")
+                    .font(.caption)
+                    .foregroundStyle(Color.konsensMuted)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(17)
@@ -415,7 +370,7 @@ private struct LeaguePulseCard: View {
     }
 }
 
-// MARK: - Simple game betting
+// MARK: - Play
 
 struct GamePlayView: View {
     @EnvironmentObject private var store: AppStore
@@ -423,11 +378,11 @@ struct GamePlayView: View {
     @State private var amount = 50
 
     private var markets: [Market] {
-        let playful = store.markets.filter { !["macro", "finance", "bourse"].contains($0.category.lowercased()) }
-        return playful.isEmpty ? store.markets : playful
+        let fun = store.markets.filter { !["macro", "finance", "bourse"].contains($0.category.lowercased()) }
+        return fun.isEmpty ? store.markets : fun
     }
 
-    private var market: Market? {
+    private var current: Market? {
         guard !markets.isEmpty else { return nil }
         return markets[min(index, markets.count - 1)]
     }
@@ -435,90 +390,43 @@ struct GamePlayView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("⚡ MISER")
-                        .font(.system(size: 10, weight: .black, design: .rounded))
-                        .tracking(1.2)
-                        .foregroundStyle(Color.konsensViolet)
-                    Text("Ton instinct contre la ligue.")
-                        .font(.system(size: 31, weight: .black, design: .rounded))
-                    Text("Des sujets rapides, légers et vérifiables. Tu engages des Koins, jamais de l’argent réel.")
-                        .font(.caption)
-                        .foregroundStyle(Color.konsensMuted)
-                }
+                gameTitle("⚡ MISER", "Ton instinct contre la ligue.", "Des sujets rapides, légers et vérifiables. Tu engages des Koins, jamais de l’argent réel.", Color.konsensViolet)
 
-                if let market {
+                if let current {
                     VStack(alignment: .leading, spacing: 18) {
                         HStack {
-                            Text(market.category.uppercased())
-                                .font(.caption2.bold())
-                                .foregroundStyle(Color.konsensGreen)
+                            Text(current.category.uppercased()).font(.caption2.bold()).foregroundStyle(Color.konsensGreen)
                             Spacer()
-                            Text("\(market.yesProbability)% OUI")
-                                .font(.caption.monospacedDigit().bold())
-                                .foregroundStyle(Color.konsensMuted)
+                            Text("\(current.yesProbability)% OUI").font(.caption.monospacedDigit().bold()).foregroundStyle(Color.konsensMuted)
                         }
-                        Text(market.question)
+
+                        Text(current.question)
                             .font(.system(size: 28, weight: .black, design: .rounded))
                             .minimumScaleFactor(0.8)
 
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("TA MISE")
-                                .font(.system(size: 8, weight: .black, design: .rounded))
-                                .foregroundStyle(Color.konsensMuted)
-                            HStack(spacing: 7) {
-                                ForEach([25, 50, 100, 250], id: \.self) { value in
-                                    Button("\(value) K") { amount = value }
-                                        .font(.caption.bold())
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 9)
-                                        .background(amount == value ? Color.konsensGold : Color.white.opacity(0.05), in: Capsule())
-                                        .foregroundStyle(amount == value ? Color.black : Color.white)
-                                }
-                            }
-                        }
+                        stakePicker(values: [25, 50, 100, 250])
 
                         HStack(spacing: 10) {
-                            playButton(title: "NON", icon: "xmark", color: Color.konsensNegative) {
-                                Task { await store.bet(market, outcome: "no", amount: amount); next() }
+                            betButton("NON", icon: "xmark", color: Color.konsensNegative) {
+                                Task { await store.bet(current, outcome: "no", amount: amount); next() }
                             }
-                            playButton(title: "OUI", icon: "checkmark", color: Color.konsensPositive) {
-                                Task { await store.bet(market, outcome: "yes", amount: amount); next() }
+                            betButton("OUI", icon: "checkmark", color: Color.konsensPositive) {
+                                Task { await store.bet(current, outcome: "yes", amount: amount); next() }
                             }
                         }
                     }
                     .padding(20)
-                    .background(
-                        LinearGradient(
-                            colors: [Color.konsensViolet.opacity(0.19), Color.konsensPanelRaised],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        in: RoundedRectangle(cornerRadius: 27)
-                    )
+                    .background(LinearGradient(colors: [Color.konsensViolet.opacity(0.19), Color.konsensPanelRaised], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 27))
                     .overlay(RoundedRectangle(cornerRadius: 27).stroke(Color.konsensViolet.opacity(0.22)))
 
                     HStack {
                         Text("Challenge \(min(index + 1, markets.count)) / \(markets.count)")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(Color.konsensMuted)
+                            .font(.caption2.monospacedDigit()).foregroundStyle(Color.konsensMuted)
                         Spacer()
-                        Button("PASSER →") { next() }
-                            .font(.caption.bold())
-                            .foregroundStyle(Color.konsensBlue)
+                        Button("PASSER →") { next() }.font(.caption.bold()).foregroundStyle(Color.konsensBlue)
                     }
                 } else {
-                    VStack(spacing: 12) {
-                        Image(systemName: "sparkles").font(.largeTitle).foregroundStyle(Color.konsensViolet)
-                        Text("Les prochains challenges se préparent.").font(.headline)
-                        Text("Le moteur privilégiera les sujets fun, pop culture, sport, internet, société et tech.")
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(Color.konsensMuted)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(30)
-                    .panel()
+                    GameEmptyCard(icon: "sparkles", title: "Les prochains challenges se préparent", detail: "Le moteur privilégie les sujets fun et partageables.", color: Color.konsensViolet)
                 }
             }
             .padding(.horizontal, 18)
@@ -527,10 +435,36 @@ struct GamePlayView: View {
         }
     }
 
-    private func playButton(title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
+    @ViewBuilder
+    private func gameTitle(_ eyebrow: String, _ title: String, _ detail: String, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(eyebrow).font(.system(size: 10, weight: .black, design: .rounded)).tracking(1.2).foregroundStyle(color)
+            Text(title).font(.system(size: 31, weight: .black, design: .rounded))
+            Text(detail).font(.caption).foregroundStyle(Color.konsensMuted)
+        }
+    }
+
+    @ViewBuilder
+    private func stakePicker(values: [Int]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("TA MISE").font(.system(size: 8, weight: .black, design: .rounded)).foregroundStyle(Color.konsensMuted)
+            HStack(spacing: 7) {
+                ForEach(values, id: \.self) { value in
+                    Button("\(value) K") { amount = value }
+                        .font(.caption.bold())
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background(amount == value ? Color.konsensGold : Color.white.opacity(0.05), in: Capsule())
+                        .foregroundStyle(amount == value ? Color.black : Color.white)
+                }
+            }
+        }
+    }
+
+    private func betButton(_ title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: icon)
-                .font(.headline.rounded().bold())
+                .font(.system(size: 17, weight: .bold, design: .rounded))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 15)
                 .background(color, in: RoundedRectangle(cornerRadius: 16))
@@ -543,13 +477,11 @@ struct GamePlayView: View {
 
     private func next() {
         guard !markets.isEmpty else { return }
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-            index = (index + 1) % markets.count
-        }
+        withAnimation(.easeOut(duration: 0.22)) { index = (index + 1) % markets.count }
     }
 }
 
-// MARK: - Simple game investing
+// MARK: - Invest
 
 struct GameInvestView: View {
     @EnvironmentObject private var store: AppStore
@@ -565,59 +497,44 @@ struct GameInvestView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("📈 INVESTIR")
-                        .font(.system(size: 10, weight: .black, design: .rounded))
-                        .tracking(1.2)
-                        .foregroundStyle(Color.konsensBlue)
-                    Text("Fais jouer le réel.")
-                        .font(.system(size: 31, weight: .black, design: .rounded))
-                    Text("Choisis un actif, engage tes Koins et regarde ton patrimoine évoluer avec le marché.")
-                        .font(.caption)
-                        .foregroundStyle(Color.konsensMuted)
+                    Text("📈 INVESTIR").font(.system(size: 10, weight: .black, design: .rounded)).tracking(1.2).foregroundStyle(Color.konsensBlue)
+                    Text("Fais jouer le réel.").font(.system(size: 31, weight: .black, design: .rounded))
+                    Text("Choisis un actif, engage tes Koins et regarde ton patrimoine évoluer avec le marché.").font(.caption).foregroundStyle(Color.konsensMuted)
                 }
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 9) {
                         ForEach(store.assets) { asset in
-                            Button {
-                                selectedID = asset.id
-                            } label: {
+                            Button { selectedID = asset.id } label: {
                                 VStack(alignment: .leading, spacing: 5) {
-                                    Text(asset.symbol)
-                                        .font(.headline.monospaced().bold())
-                                    Text(asset.name)
-                                        .font(.caption2)
-                                        .lineLimit(1)
-                                        .foregroundStyle(Color.konsensMuted)
+                                    Text(asset.symbol).font(.headline.monospaced().bold())
+                                    Text(asset.name).font(.caption2).lineLimit(1).foregroundStyle(Color.konsensMuted)
                                 }
                                 .frame(width: 112, alignment: .leading)
                                 .padding(13)
-                                .background((selected?.id == asset.id ? Color.konsensBlue.opacity(0.18) : Color.white.opacity(0.035)), in: RoundedRectangle(cornerRadius: 16))
-                                .overlay(RoundedRectangle(cornerRadius: 16).stroke(selected?.id == asset.id ? Color.konsensBlue.opacity(0.45) : Color.white.opacity(0.05)))
+                                .background(selected?.id == asset.id ? Color.konsensBlue.opacity(0.18) : Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 16))
                             }
                             .buttonStyle(.plain)
                         }
                     }
                 }
 
-                if let asset = selected {
+                if let selected {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(asset.name).font(.title2.rounded().bold())
-                                Text(asset.kind.uppercased()).font(.caption2.bold()).foregroundStyle(Color.konsensMuted)
+                                Text(selected.name).font(.system(size: 20, weight: .bold, design: .rounded))
+                                Text(selected.kind.uppercased()).font(.caption2.bold()).foregroundStyle(Color.konsensMuted)
                             }
                             Spacer()
                             VStack(alignment: .trailing, spacing: 2) {
-                                Text(String(format: asset.price >= 1000 ? "%.0f" : "%.2f", asset.price))
-                                    .font(.title2.monospacedDigit().bold())
-                                Text(asset.currency).font(.caption2).foregroundStyle(Color.konsensMuted)
+                                Text(String(format: selected.price >= 1000 ? "%.0f" : "%.2f", selected.price)).font(.title2.monospacedDigit().bold())
+                                Text(selected.currency).font(.caption2).foregroundStyle(Color.konsensMuted)
                             }
                         }
 
                         Text("Tu n’achètes rien de réel : Konsens reproduit l’impact de ce choix sur ton score.")
-                            .font(.caption)
-                            .foregroundStyle(Color.white.opacity(0.72))
+                            .font(.caption).foregroundStyle(Color.white.opacity(0.72))
 
                         HStack(spacing: 7) {
                             ForEach([50, 100, 250, 500], id: \.self) { value in
@@ -630,7 +547,7 @@ struct GameInvestView: View {
                         }
 
                         Button {
-                            Task { await store.buyAsset(asset, amount: amount) }
+                            Task { await store.buyAsset(selected, amount: amount) }
                         } label: {
                             HStack {
                                 Image(systemName: "rocket.fill")
@@ -638,7 +555,7 @@ struct GameInvestView: View {
                                 Spacer()
                                 Text("GO")
                             }
-                            .font(.headline.rounded().bold())
+                            .font(.system(size: 17, weight: .bold, design: .rounded))
                             .padding(15)
                             .foregroundStyle(Color.black)
                             .background(Color.konsensGreen, in: RoundedRectangle(cornerRadius: 16))
@@ -648,17 +565,14 @@ struct GameInvestView: View {
                         .opacity(store.credits < amount ? 0.35 : 1)
                     }
                     .padding(19)
-                    .background(
-                        LinearGradient(colors: [Color.konsensBlue.opacity(0.16), Color.konsensPanelRaised], startPoint: .topLeading, endPoint: .bottomTrailing),
-                        in: RoundedRectangle(cornerRadius: 25)
-                    )
+                    .background(LinearGradient(colors: [Color.konsensBlue.opacity(0.16), Color.konsensPanelRaised], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 25))
                     .overlay(RoundedRectangle(cornerRadius: 25).stroke(Color.konsensBlue.opacity(0.2)))
                 }
 
                 HStack(spacing: 10) {
-                    scoreTile("DISPO", String(format: "%.0f K", store.wealth.cash), Color.konsensGold)
-                    scoreTile("INVESTI", String(format: "%.0f K", store.wealth.investments), Color.konsensBlue)
-                    scoreTile("TOTAL", String(format: "%.0f K", store.wealth.total), Color.konsensGreen)
+                    ScoreTile(title: "DISPO", value: String(format: "%.0f K", store.wealth.cash), color: Color.konsensGold)
+                    ScoreTile(title: "INVESTI", value: String(format: "%.0f K", store.wealth.investments), color: Color.konsensBlue)
+                    ScoreTile(title: "TOTAL", value: String(format: "%.0f K", store.wealth.total), color: Color.konsensGreen)
                 }
             }
             .padding(.horizontal, 18)
@@ -666,8 +580,14 @@ struct GameInvestView: View {
             .padding(.bottom, 112)
         }
     }
+}
 
-    private func scoreTile(_ title: String, _ value: String, _ color: Color) -> some View {
+private struct ScoreTile: View {
+    let title: String
+    let value: String
+    let color: Color
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title).font(.system(size: 7, weight: .black, design: .rounded)).foregroundStyle(Color.konsensMuted)
             Text(value).font(.caption.monospacedDigit().bold()).foregroundStyle(color)
@@ -678,7 +598,7 @@ struct GameInvestView: View {
     }
 }
 
-// MARK: - League social
+// MARK: - League
 
 struct LeagueSocialView: View {
     @EnvironmentObject private var store: AppStore
@@ -691,54 +611,35 @@ struct LeagueSocialView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("🏆 \(leagueName.uppercased())")
-                        .font(.system(size: 10, weight: .black, design: .rounded))
-                        .tracking(1.1)
-                        .foregroundStyle(Color.konsensGold)
-                    Text("Passe devant. Fais-le savoir.")
-                        .font(.system(size: 30, weight: .black, design: .rounded))
-                    Text("Le classement suit ton patrimoine. Les réactions restent volontairement courtes et bon enfant.")
-                        .font(.caption)
-                        .foregroundStyle(Color.konsensMuted)
+                    Text("🏆 \(leagueName.uppercased())").font(.system(size: 10, weight: .black, design: .rounded)).foregroundStyle(Color.konsensGold)
+                    Text("Passe devant. Fais-le savoir.").font(.system(size: 30, weight: .black, design: .rounded))
+                    Text("Le classement suit ton patrimoine. Les réactions restent courtes et bon enfant.").font(.caption).foregroundStyle(Color.konsensMuted)
                 }
 
                 VStack(spacing: 8) {
                     ForEach(leaders) { leader in
-                        VStack(spacing: 9) {
-                            HStack(spacing: 10) {
-                                Text("#\(leader.rank)")
-                                    .font(.headline.monospacedDigit().bold())
-                                    .foregroundStyle(leader.rank <= 3 ? Color.konsensGold : Color.konsensMuted)
-                                    .frame(width: 36, alignment: .leading)
-                                Circle()
-                                    .fill(leader.isCurrentUser ? Color.konsensGreen : Color.konsensViolet.opacity(0.65))
-                                    .frame(width: 38, height: 38)
-                                    .overlay(Text(leader.initials).font(.caption.bold()))
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(leader.isCurrentUser ? "\(leader.name) · TOI" : leader.name)
-                                        .font(.subheadline.rounded().bold())
-                                        .foregroundStyle(leader.isCurrentUser ? Color.konsensGreen : .white)
-                                    Text(String(format: "%.0f Koins", leader.score))
-                                        .font(.caption.monospacedDigit())
-                                        .foregroundStyle(Color.konsensMuted)
-                                }
-                                Spacer()
-                                if !leader.isCurrentUser {
-                                    Menu {
-                                        ForEach(["😂", "🔥", "👀", "👏", "😈", "💀"], id: \.self) { emoji in
-                                            Button("\(emoji) Envoyer") {
-                                                Task { await sendReaction(to: leader.id, emoji: emoji) }
-                                            }
-                                        }
-                                    } label: {
-                                        Image(systemName: "face.smiling.inverse")
-                                            .font(.title3)
-                                            .foregroundStyle(Color.konsensViolet)
-                                            .frame(width: 38, height: 38)
-                                            .background(Color.konsensViolet.opacity(0.1), in: Circle())
+                        HStack(spacing: 10) {
+                            Text("#\(leader.rank)").font(.headline.monospacedDigit().bold()).foregroundStyle(leader.rank <= 3 ? Color.konsensGold : Color.konsensMuted).frame(width: 36, alignment: .leading)
+                            Circle()
+                                .fill(leader.isCurrentUser ? Color.konsensGreen : Color.konsensViolet.opacity(0.65))
+                                .frame(width: 38, height: 38)
+                                .overlay(Text(leader.initials).font(.caption.bold()))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(leader.isCurrentUser ? "\(leader.name) · TOI" : leader.name)
+                                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                                    .foregroundStyle(leader.isCurrentUser ? Color.konsensGreen : .white)
+                                Text(String(format: "%.0f Koins", leader.score)).font(.caption.monospacedDigit()).foregroundStyle(Color.konsensMuted)
+                            }
+                            Spacer()
+                            if !leader.isCurrentUser {
+                                Menu {
+                                    ForEach(["😂", "🔥", "👀", "👏", "😈", "💀"], id: \.self) { emoji in
+                                        Button("\(emoji) Envoyer") { Task { await sendReaction(to: leader.id, emoji: emoji) } }
                                     }
-                                    .disabled(sending)
+                                } label: {
+                                    Image(systemName: "face.smiling").font(.title3).foregroundStyle(Color.konsensViolet).frame(width: 38, height: 38).background(Color.konsensViolet.opacity(0.1), in: Circle())
                                 }
+                                .disabled(sending)
                             }
                         }
                         .padding(13)
@@ -749,23 +650,16 @@ struct LeagueSocialView: View {
                 .background(Color.konsensPanelRaised.opacity(0.95), in: RoundedRectangle(cornerRadius: 23))
 
                 VStack(alignment: .leading, spacing: 11) {
-                    Text("💬 LE BANC")
-                        .font(.system(size: 9, weight: .black, design: .rounded))
-                        .foregroundStyle(Color.konsensViolet)
+                    Text("💬 LE BANC").font(.system(size: 9, weight: .black, design: .rounded)).foregroundStyle(Color.konsensViolet)
                     if reactions.isEmpty {
-                        Text("Aucune vanne pour l’instant. Fais un bon coup et lance les hostilités gentilles.")
-                            .font(.caption)
-                            .foregroundStyle(Color.konsensMuted)
+                        Text("Aucune vanne pour l’instant. Fais un bon coup et lance les hostilités gentilles.").font(.caption).foregroundStyle(Color.konsensMuted)
                     } else {
                         ForEach(reactions.prefix(12)) { reaction in
                             HStack(alignment: .top, spacing: 9) {
                                 Text(reaction.reaction).font(.title2)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("\(reaction.actorUsername) → \(reaction.targetUsername)")
-                                        .font(.caption.bold())
-                                    Text(relativeDate(reaction.createdAt))
-                                        .font(.caption2)
-                                        .foregroundStyle(Color.konsensMuted)
+                                    Text("\(reaction.actorUsername) → \(reaction.targetUsername)").font(.caption.bold())
+                                    Text(relativeDate(reaction.createdAt)).font(.caption2).foregroundStyle(Color.konsensMuted)
                                 }
                                 Spacer()
                             }
@@ -797,7 +691,7 @@ struct LeagueSocialView: View {
         sending = true
         struct Params: Encodable { let p_target: UUID; let p_reaction: String }
         do {
-            let _: Int64 = try await store.supabase.rpc("send_league_reaction", params: Params(p_target: target, p_reaction: emoji)).execute().value
+            _ = try await store.supabase.rpc("send_league_reaction", params: Params(p_target: target, p_reaction: emoji)).execute()
             store.showToast("\(emoji) envoyé dans la ligue")
             await load()
         } catch {
@@ -815,7 +709,7 @@ struct LeagueSocialView: View {
     }
 }
 
-// MARK: - Rewarded ad
+// MARK: - Rewarded daily ad
 
 private struct RewardedDailyAdView: View {
     @EnvironmentObject private var store: AppStore
@@ -827,66 +721,44 @@ private struct RewardedDailyAdView: View {
     @State private var secondsLeft = 4
     @State private var ready = false
     @State private var claiming = false
-    @State private var errorText: String?
+    @State private var message: String?
     private let sessionID = UUID().uuidString
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color(red: 0.10, green: 0.04, blue: 0.18), Color.konsensBackground], startPoint: .topLeading, endPoint: .bottomTrailing)
-                .ignoresSafeArea()
+            LinearGradient(colors: [Color(red: 0.10, green: 0.04, blue: 0.18), Color.konsensBackground], startPoint: .topLeading, endPoint: .bottomTrailing).ignoresSafeArea()
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
-                    Text("RÉCOMPENSE DU JOUR")
-                        .font(.caption.bold())
-                        .foregroundStyle(Color.konsensGold)
+                    Text("RÉCOMPENSE DU JOUR").font(.caption.bold()).foregroundStyle(Color.konsensGold)
                     Spacer()
-                    Button { dismiss() } label: { Image(systemName: "xmark.circle.fill").font(.title2) }
-                        .foregroundStyle(Color.konsensMuted)
+                    Button { dismiss() } label: { Image(systemName: "xmark.circle.fill").font(.title2) }.foregroundStyle(Color.konsensMuted)
                 }
 
                 Spacer()
-
-                Image(systemName: "play.rectangle.fill")
-                    .font(.system(size: 58))
-                    .foregroundStyle(Color.konsensGold)
+                Image(systemName: "play.rectangle.fill").font(.system(size: 58)).foregroundStyle(Color.konsensGold)
 
                 if let ad {
-                    Text(ad.eyebrow.uppercased())
-                        .font(.caption2.bold())
-                        .foregroundStyle(Color.konsensMuted)
-                    Text(ad.headline)
-                        .font(.system(size: 29, weight: .black, design: .rounded))
-                    if let body = ad.body {
-                        Text(body)
-                            .font(.subheadline)
-                            .foregroundStyle(Color.white.opacity(0.72))
-                    }
-                    Text("Présenté par \(ad.sponsorName)")
-                        .font(.caption.bold())
-                        .foregroundStyle(Color.konsensViolet)
-                } else if let errorText {
-                    Text("Spot indisponible")
-                        .font(.title2.rounded().bold())
-                    Text(errorText)
-                        .font(.caption)
-                        .foregroundStyle(Color.konsensMuted)
+                    Text(ad.eyebrow.uppercased()).font(.caption2.bold()).foregroundStyle(Color.konsensMuted)
+                    Text(ad.headline).font(.system(size: 29, weight: .black, design: .rounded))
+                    if let body = ad.body { Text(body).font(.subheadline).foregroundStyle(Color.white.opacity(0.72)) }
+                    Text("Présenté par \(ad.sponsorName)").font(.caption.bold()).foregroundStyle(Color.konsensViolet)
+                } else if let message {
+                    Text("Spot indisponible").font(.system(size: 20, weight: .bold, design: .rounded))
+                    Text(message).font(.caption).foregroundStyle(Color.konsensMuted)
                 } else {
-                    ProgressView("Chargement du sponsor…")
-                        .tint(Color.konsensGold)
+                    ProgressView("Chargement du sponsor…").tint(Color.konsensGold)
                 }
 
                 Spacer()
 
-                Button {
-                    Task { await claim() }
-                } label: {
+                Button { Task { await claim() } } label: {
                     HStack {
                         if claiming { ProgressView().tint(.black) }
                         Image(systemName: ready ? "gift.fill" : "clock.fill")
                         Text(ready ? "ENCAISSER +100 K" : "PATIENTE \(secondsLeft) s")
                         Spacer()
                     }
-                    .font(.headline.rounded().bold())
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
                     .padding(15)
                     .foregroundStyle(ready ? Color.black : Color.konsensMuted)
                     .background(ready ? Color.konsensGold : Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
@@ -894,9 +766,8 @@ private struct RewardedDailyAdView: View {
                 .buttonStyle(.plain)
                 .disabled(!ready || claiming || impressionID == nil)
 
-                Text("Le crédit quotidien n’est accordé qu’une fois par jour après une impression sponsorisée validée côté serveur.")
-                    .font(.caption2)
-                    .foregroundStyle(Color.konsensMuted)
+                Text("Le crédit est accordé une seule fois par jour après validation du spot sponsorisé côté serveur.")
+                    .font(.caption2).foregroundStyle(Color.konsensMuted)
             }
             .padding(22)
         }
@@ -917,12 +788,21 @@ private struct RewardedDailyAdView: View {
             let destination_url: String
             let placement: String
         }
+        struct Track: Encodable {
+            let p_campaign_id: UUID
+            let p_creative_id: UUID
+            let p_event_type: String
+            let p_placement: String
+            let p_session_id: String
+        }
+
         do {
             let rows: [Row] = try await store.supabase.rpc("get_active_ad", params: Params(p_placement: "rewarded_daily", p_session_id: sessionID)).execute().value
             guard let row = rows.first else {
-                errorText = "Aucune campagne récompensée n’est active pour le moment."
+                message = "Aucune campagne récompensée n’est active."
                 return
             }
+
             let loaded = SponsoredAd(
                 campaignID: row.campaign_id,
                 id: row.creative_id,
@@ -935,16 +815,10 @@ private struct RewardedDailyAdView: View {
                 placement: row.placement
             )
             ad = loaded
-            struct TrackParams: Encodable {
-                let p_campaign_id: UUID
-                let p_creative_id: UUID
-                let p_event_type: String
-                let p_placement: String
-                let p_session_id: String
-            }
-            let event: Int64 = try await store.supabase.rpc(
+
+            let eventID: Int64 = try await store.supabase.rpc(
                 "track_ad_event",
-                params: TrackParams(
+                params: Track(
                     p_campaign_id: loaded.campaignID,
                     p_creative_id: loaded.id,
                     p_event_type: "impression",
@@ -952,7 +826,8 @@ private struct RewardedDailyAdView: View {
                     p_session_id: sessionID
                 )
             ).execute().value
-            impressionID = event
+            impressionID = eventID
+
             for remaining in stride(from: 4, through: 1, by: -1) {
                 secondsLeft = remaining
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
@@ -960,16 +835,17 @@ private struct RewardedDailyAdView: View {
             secondsLeft = 0
             ready = true
         } catch {
-            errorText = "Le module sponsorisé doit être activé côté serveur avant la collecte."
+            message = "Le module sponsorisé doit être activé côté serveur avant la collecte."
         }
     }
 
     @MainActor
     private func claim() async {
         guard let impressionID else { return }
-        claiming = true
         struct Params: Encodable { let p_ad_event_id: Int64 }
         struct Row: Decodable { let claimed: Bool; let amount: Int; let balance: Double; let streak: Int }
+
+        claiming = true
         do {
             let rows: [Row] = try await store.supabase.rpc("claim_daily_reward", params: Params(p_ad_event_id: impressionID)).execute().value
             if let row = rows.first {
@@ -984,12 +860,7 @@ private struct RewardedDailyAdView: View {
     }
 }
 
-// MARK: - Shared game data loaders
-
-private struct DailyRewardStatus {
-    let claimable: Bool
-    let amount: Int
-}
+// MARK: - Data loaders
 
 private struct LeagueBundle {
     let leaders: [Leader]
@@ -998,17 +869,19 @@ private struct LeagueBundle {
 }
 
 @MainActor
-private func fetchDailyRewardStatus(store: AppStore) async -> DailyRewardStatus {
+private func fetchDailyRewardStatus(store: AppStore) async -> Bool {
     struct Row: Decodable { let claimable: Bool; let amount: Int; let claimed_at: String? }
     do {
         let rows: [Row] = try await store.supabase.rpc("get_my_daily_reward_status").execute().value
-        if let row = rows.first { return DailyRewardStatus(claimable: row.claimable, amount: row.amount) }
-    } catch { }
-    return DailyRewardStatus(claimable: true, amount: 100)
+        return rows.first?.claimable ?? true
+    } catch {
+        return true
+    }
 }
 
 @MainActor
 private func fetchLeagueBundle(store: AppStore) async -> LeagueBundle {
+    struct Limit: Encodable { let p_limit: Int }
     struct LeaderRow: Decodable {
         let position: Int
         let user_id: UUID
@@ -1027,38 +900,38 @@ private func fetchLeagueBundle(store: AppStore) async -> LeagueBundle {
         let reaction: String
         let created_at: String
     }
-    struct LimitParams: Encodable { let p_limit: Int }
 
+    var leagueName = "Ligue Flash"
     var leaders: [Leader] = []
-    var name = "Ligue Flash"
+    var reactions: [LeagueReaction] = []
+
     do {
-        let rows: [LeaderRow] = try await store.supabase.rpc("get_my_league_leaderboard", params: LimitParams(p_limit: 20)).execute().value
-        leaders = rows.map {
-            name = $0.league_name
+        let rows: [LeaderRow] = try await store.supabase.rpc("get_my_league_leaderboard", params: Limit(p_limit: 20)).execute().value
+        leaders = rows.map { row in
+            leagueName = row.league_name
             return Leader(
-                id: $0.user_id,
-                rank: $0.position,
-                name: $0.username,
-                initials: String($0.avatar_seed.prefix(2)).uppercased(),
-                score: $0.score,
-                isCurrentUser: $0.is_current_user
+                id: row.user_id,
+                rank: row.position,
+                name: row.username,
+                initials: String(row.avatar_seed.prefix(2)).uppercased(),
+                score: row.score,
+                isCurrentUser: row.is_current_user
             )
         }
     } catch { }
 
-    var reactions: [LeagueReaction] = []
     do {
-        let rows: [ReactionRow] = try await store.supabase.rpc("get_my_league_reactions", params: LimitParams(p_limit: 20)).execute().value
+        let rows: [ReactionRow] = try await store.supabase.rpc("get_my_league_reactions", params: Limit(p_limit: 20)).execute().value
         let formatter = ISO8601DateFormatter()
-        reactions = rows.map {
+        reactions = rows.map { row in
             LeagueReaction(
-                id: $0.id,
-                actorID: $0.actor_id,
-                actorUsername: $0.actor_username,
-                targetID: $0.target_id,
-                targetUsername: $0.target_username,
-                reaction: $0.reaction,
-                createdAt: formatter.date(from: $0.created_at) ?? Date()
+                id: row.id,
+                actorID: row.actor_id,
+                actorUsername: row.actor_username,
+                targetID: row.target_id,
+                targetUsername: row.target_username,
+                reaction: row.reaction,
+                createdAt: formatter.date(from: row.created_at) ?? Date()
             )
         }
     } catch { }
@@ -1066,10 +939,11 @@ private func fetchLeagueBundle(store: AppStore) async -> LeagueBundle {
     if leaders.isEmpty, let userID = store.supabase.auth.currentUser?.id {
         leaders = [Leader(id: userID, rank: 1, name: store.username, initials: String(store.username.prefix(1)).uppercased(), score: store.wealth.total, isCurrentUser: true)]
     }
-    return LeagueBundle(leaders: leaders, reactions: reactions, name: name)
+
+    return LeagueBundle(leaders: leaders, reactions: reactions, name: leagueName)
 }
 
-// MARK: - Preserved finance experience for Premium
+// MARK: - Preserved Premium finance home
 
 struct FinanceLegacyHomeView: View {
     @EnvironmentObject private var store: AppStore
@@ -1079,11 +953,8 @@ struct FinanceLegacyHomeView: View {
             LazyVStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 7) {
                     Eyebrow(text: "MODE FINANCE PRO")
-                    Text("Bonjour \(store.username).")
-                        .font(.system(size: 36, weight: .bold, design: .rounded))
-                    Text("Analyse ton patrimoine avec l’interface financière complète.")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.konsensMuted)
+                    Text("Bonjour \(store.username).").font(.system(size: 36, weight: .bold, design: .rounded))
+                    Text("Analyse ton patrimoine avec l’interface financière complète.").font(.subheadline).foregroundStyle(Color.konsensMuted)
                 }
 
                 VStack(alignment: .leading, spacing: 16) {
@@ -1095,15 +966,13 @@ struct FinanceLegacyHomeView: View {
                             .foregroundStyle(store.wealth.performance >= 0 ? Color.konsensPositive : Color.konsensNegative)
                     }
                     HStack(alignment: .firstTextBaseline, spacing: 7) {
-                        Text(String(format: "%.0f", store.wealth.total))
-                            .font(.system(size: 43, weight: .bold, design: .rounded))
-                            .monospacedDigit()
+                        Text(String(format: "%.0f", store.wealth.total)).font(.system(size: 43, weight: .bold, design: .rounded)).monospacedDigit()
                         Text("Koins").font(.caption).foregroundStyle(Color.konsensMuted)
                     }
                     HStack(spacing: 8) {
-                        legacyMetric("Disponible", store.wealth.cash)
-                        legacyMetric("Investi", store.wealth.investments)
-                        legacyMetric("Paris", store.wealth.bets)
+                        PremiumMetric(title: "Disponible", value: store.wealth.cash)
+                        PremiumMetric(title: "Investi", value: store.wealth.investments)
+                        PremiumMetric(title: "Paris", value: store.wealth.bets)
                     }
                 }
                 .panel()
@@ -1120,8 +989,13 @@ struct FinanceLegacyHomeView: View {
         }
         .refreshable { await store.refreshFinance() }
     }
+}
 
-    private func legacyMetric(_ title: String, _ value: Double) -> some View {
+private struct PremiumMetric: View {
+    let title: String
+    let value: Double
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title.uppercased()).font(.system(size: 7, weight: .bold)).foregroundStyle(Color.konsensMuted)
             Text(String(format: "%.0f", value)).font(.subheadline.monospacedDigit().bold())
