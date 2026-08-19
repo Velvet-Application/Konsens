@@ -74,7 +74,7 @@ struct RootView: View {
             Group {
                 switch store.selectedTab {
                 case .wealth:
-                    if isFinancePro { FinanceLegacyHomeView() } else { ArenaView() }
+                    if isFinancePro { FinanceLegacyHomeView() } else { GameHomeView() }
                 case .play:
                     if isFinancePro { MarketsView() } else { GamePlayView() }
                 case .invest:
