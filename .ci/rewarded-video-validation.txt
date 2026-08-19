@@ -1,0 +1,1 @@
+validation snapshot for rewarded video integration after iOS deployment-target fix
