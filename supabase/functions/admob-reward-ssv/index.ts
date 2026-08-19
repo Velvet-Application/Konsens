@@ -5,6 +5,7 @@ import { createPublicKey, verify } from "node:crypto";
 
 const PROD_KEYS_URL = "https://www.gstatic.com/admob/reward/verifier-keys.json";
 const TEST_KEYS_URL = "https://www.gstatic.com/admob/reward/verifier-keys-test.json";
+const KONSENS_REWARDED_AD_UNIT_ID = "ca-app-pub-7926506553495295/6184760199";
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_REWARD_AGE_MS = 6 * 60 * 60 * 1000;
 const MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
@@ -164,8 +165,9 @@ Deno.serve(async (request) => {
       return json({ ok: false, error: "stale_reward_callback" }, 400);
     }
 
-    const configuredAdUnit = Deno.env.get("ADMOB_REWARDED_AD_UNIT_ID")?.trim();
-    if (configuredAdUnit && adUnit !== configuredAdUnit) {
+    // Production rewards are bound to the one AdMob rewarded unit owned by Konsens.
+    // This is deliberately not configurable by a client or optional environment variable.
+    if (adUnit !== KONSENS_REWARDED_AD_UNIT_ID) {
       return json({ ok: false, error: "unexpected_ad_unit" }, 400);
     }
 
