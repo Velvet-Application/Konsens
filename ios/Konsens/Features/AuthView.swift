@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import Supabase
 
@@ -6,7 +7,17 @@ struct AuthView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var isSignup = false
+    @State private var isSubmitting = false
     @State private var errorMessage = ""
+    @State private var successMessage = ""
+
+    private var normalizedEmail: String {
+        email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private var canSubmit: Bool {
+        normalizedEmail.contains("@") && normalizedEmail.contains(".") && password.count >= 6 && !isSubmitting
+    }
 
     var body: some View {
         ScrollView {
@@ -28,24 +39,90 @@ struct AuthView: View {
                     Button("Continuer avec Apple") { Task { try? await store.signIn(provider: .apple) } }.buttonStyle(AuthButton())
                     Button("Continuer avec Google") { Task { try? await store.signIn(provider: .google) } }.buttonStyle(AuthButton())
                     HStack { Rectangle().frame(height: 1); Text("OU").font(.system(size: 8)); Rectangle().frame(height: 1) }.foregroundStyle(Color.white.opacity(0.1))
-                    TextField("Adresse mail", text: $email).textInputAutocapitalization(.never).keyboardType(.emailAddress).field()
-                    SecureField("Mot de passe", text: $password).field()
-                    if !errorMessage.isEmpty { Text(errorMessage).font(.caption).foregroundStyle(Color.konsensNegative) }
-                    Button(isSignup ? "Créer mon portefeuille" : "Me connecter") {
-                        Task {
-                            do {
-                                if isSignup { try await store.signUp(email: email, password: password) }
-                                else { try await store.signIn(email: email, password: password) }
-                            } catch { errorMessage = error.localizedDescription }
+                    TextField("Adresse mail", text: $email)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.emailAddress)
+                        .textContentType(.emailAddress)
+                        .field()
+                    SecureField("Mot de passe", text: $password)
+                        .textContentType(isSignup ? .newPassword : .password)
+                        .field()
+
+                    if !errorMessage.isEmpty {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundStyle(Color.konsensNegative)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if !successMessage.isEmpty {
+                        Text(successMessage)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.konsensGreen)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    Button {
+                        submit()
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isSubmitting {
+                                ProgressView()
+                                    .tint(Color.konsensBackground)
+                            }
+                            Text(isSubmitting ? (isSignup ? "Création…" : "Connexion…") : (isSignup ? "Créer mon portefeuille" : "Me connecter"))
                         }
-                    }.buttonStyle(PrimaryButton())
-                    Button(isSignup ? "J’ai déjà un compte" : "Créer un compte") { isSignup.toggle() }
-                        .font(.footnote.bold()).foregroundStyle(Color.konsensGreen)
+                    }
+                    .buttonStyle(PrimaryButton())
+                    .disabled(!canSubmit)
+                    .opacity(canSubmit || isSubmitting ? 1 : 0.55)
+
+                    Button(isSignup ? "J’ai déjà un compte" : "Créer un compte") {
+                        isSignup.toggle()
+                        errorMessage = ""
+                        successMessage = ""
+                    }
+                    .disabled(isSubmitting)
+                    .font(.footnote.bold()).foregroundStyle(Color.konsensGreen)
                 }.padding(18).background(Color.konsensPanel, in: RoundedRectangle(cornerRadius: 22)).overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.white.opacity(0.07)))
                 Text("Les Koins sont une unité virtuelle sans valeur monétaire. Konsens ne permet aucun dépôt, retrait ou conversion en argent.")
                     .font(.system(size: 8)).foregroundStyle(Color.konsensMuted).multilineTextAlignment(.center).frame(maxWidth: .infinity)
             }.padding(24).frame(maxWidth: 520)
         }.background(Color.konsensBackground)
+    }
+
+    private func submit() {
+        guard canSubmit else {
+            if normalizedEmail.isEmpty || !normalizedEmail.contains("@") || !normalizedEmail.contains(".") {
+                errorMessage = "Saisis une adresse e-mail valide."
+            } else if password.count < 6 {
+                errorMessage = "Le mot de passe doit contenir au moins 6 caractères."
+            }
+            return
+        }
+
+        isSubmitting = true
+        errorMessage = ""
+        successMessage = ""
+        let cleanEmail = normalizedEmail
+
+        Task {
+            defer { isSubmitting = false }
+            do {
+                if isSignup {
+                    try await store.signUp(email: cleanEmail, password: password)
+                    if store.supabase.auth.currentSession != nil {
+                        await store.restoreSession()
+                    } else {
+                        successMessage = "Compte créé. Vérifie ton e-mail puis reviens dans Konsens pour commencer."
+                    }
+                } else {
+                    try await store.signIn(email: cleanEmail, password: password)
+                }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 }
 
