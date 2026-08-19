@@ -7,7 +7,7 @@ struct NetworkView: View {
     var body: some View { TransparencyNativeView().environmentObject(store) }
 }
 
-// MARK: - Game home with real rewarded video
+// MARK: - Game home
 
 struct GameHomeView: View {
     @EnvironmentObject private var store: AppStore
@@ -47,12 +47,19 @@ struct GameHomeView: View {
                 }
 
                 HStack(spacing: 10) {
-                    GameHomeShortcut(title: "MISER", detail: "Défie l’actualité", icon: "bolt.fill", tint: Color.konsensViolet) {
-                        store.selectedTab = .play
-                    }
-                    GameHomeShortcut(title: "INVESTIR", detail: "Joue le marché réel", icon: "chart.line.uptrend.xyaxis", tint: Color.konsensBlue) {
-                        store.selectedTab = .invest
-                    }
+                    GameHomeShortcut(
+                        title: "MISER",
+                        detail: "Défie l’actualité",
+                        icon: "bolt.fill",
+                        tint: Color.konsensViolet
+                    ) { store.selectedTab = .play }
+
+                    GameHomeShortcut(
+                        title: "INVESTIR",
+                        detail: "Joue le marché réel",
+                        icon: "chart.line.uptrend.xyaxis",
+                        tint: Color.konsensBlue
+                    ) { store.selectedTab = .invest }
                 }
 
                 GameHomeLeagueCard(leaders: leaders) {
@@ -180,7 +187,7 @@ private struct GameHomeDailyDropCard: View {
             }
 
             Text(claimable
-                 ? "Regarde une courte vidéo récompensée pour débloquer le drop. Le crédit est contrôlé côté serveur et limité à une fois par jour."
+                 ? "Regarde une vidéo récompensée. Les 100 K ne sont crédités qu’après validation signée de Google côté serveur."
                  : "Bien joué. Le prochain drop sera disponible demain à ta prochaine connexion.")
                 .font(.caption)
                 .foregroundStyle(Color.white.opacity(0.72))
@@ -263,14 +270,20 @@ private struct GameHomeShortcut: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 9) {
-                Image(systemName: icon).font(.title2.bold()).foregroundStyle(tint)
-                Text(title).font(.system(size: 17, weight: .bold, design: .rounded))
-                Text(detail).font(.caption2).foregroundStyle(Color.konsensMuted)
+                Image(systemName: icon)
+                    .font(.title2.bold())
+                    .foregroundStyle(tint)
+                Text(title)
+                    .font(.system(size: 14, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(Color.konsensMuted)
             }
-            .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(15)
-            .background(tint.opacity(0.085), in: RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).stroke(tint.opacity(0.18)))
+            .background(tint.opacity(0.07), in: RoundedRectangle(cornerRadius: 19))
+            .overlay(RoundedRectangle(cornerRadius: 19).stroke(tint.opacity(0.18)))
         }
         .buttonStyle(.plain)
     }
@@ -282,21 +295,24 @@ private struct GameHomeLeagueCard: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 11) {
                 HStack {
                     Text("🏆 TA LIGUE")
                         .font(.system(size: 9, weight: .black, design: .rounded))
                         .foregroundStyle(Color.konsensGold)
                     Spacer()
-                    Text("CLASSEMENT →")
-                        .font(.system(size: 7, weight: .black, design: .rounded))
+                    Label("VOIR", systemImage: "chevron.right")
+                        .font(.caption2.bold())
                         .foregroundStyle(Color.konsensMuted)
                 }
+
                 if leaders.isEmpty {
-                    Text("Chargement du classement…").font(.caption).foregroundStyle(Color.konsensMuted)
+                    Text("Le classement se prépare.")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
                 } else {
-                    ForEach(leaders.prefix(4)) { leader in
-                        HStack(spacing: 10) {
+                    ForEach(leaders.prefix(3)) { leader in
+                        HStack(spacing: 9) {
                             Text("#\(leader.rank)")
                                 .font(.caption.monospacedDigit().bold())
                                 .foregroundStyle(leader.rank <= 3 ? Color.konsensGold : Color.konsensMuted)
@@ -309,7 +325,8 @@ private struct GameHomeLeagueCard: View {
                                 .font(.subheadline.bold())
                                 .foregroundStyle(leader.isCurrentUser ? Color.konsensGreen : .white)
                             Spacer()
-                            Text(String(format: "%.0f K", leader.score)).font(.caption.monospacedDigit().bold())
+                            Text(String(format: "%.0f K", leader.score))
+                                .font(.caption.monospacedDigit().bold())
                         }
                     }
                 }
@@ -356,7 +373,7 @@ private struct GameHomeLeaguePulse: View {
     }
 }
 
-// MARK: - Google rewarded video
+// MARK: - Google rewarded video + UMP + strict SSV
 
 @MainActor
 final class KonsensRewardedVideoController: NSObject, ObservableObject, FullScreenContentDelegate {
@@ -370,23 +387,30 @@ final class KonsensRewardedVideoController: NSObject, ObservableObject, FullScre
 
     @Published private(set) var state: State = .idle
     private var rewardedAd: RewardedAd?
-    private var rewardNonce = UUID()
 
     var adUnitID: String {
         (Bundle.main.object(forInfoDictionaryKey: "KonsensRewardedAdUnitID") as? String)
         ?? "ca-app-pub-3940256099942544/1712485313"
     }
 
-    func prepare(userID: String?) async {
+    var isGoogleDemoUnit: Bool {
+        adUnitID == "ca-app-pub-3940256099942544/1712485313"
+    }
+
+    func prepare(userID: String?, rewardNonce: UUID) async {
         if state == .ready || state == .loading { return }
+
+        guard await KonsensPrivacyConsentManager.shared.ensureAdsAllowed() else {
+            state = .failed("Consentement publicitaire requis.")
+            return
+        }
+
         state = .loading
-        MobileAds.shared.start()
         do {
-            rewardNonce = UUID()
             let ad = try await RewardedAd.load(with: adUnitID, request: Request())
             let verification = ServerSideVerificationOptions()
             verification.userIdentifier = userID
-            verification.customRewardText = rewardNonce.uuidString
+            verification.customRewardText = rewardNonce.uuidString.lowercased()
             ad.serverSideVerificationOptions = verification
             ad.fullScreenContentDelegate = self
             rewardedAd = ad
@@ -397,22 +421,21 @@ final class KonsensRewardedVideoController: NSObject, ObservableObject, FullScre
         }
     }
 
-    func present(onEarned: @escaping (_ rewardNonce: UUID, _ adUnitID: String) -> Void) {
+    func present(onEarned: @escaping () -> Void) {
         guard let rewardedAd else {
             state = .failed("La vidéo n’est pas encore prête.")
             return
         }
-        let nonce = rewardNonce
+
         state = .presenting
-        rewardedAd.present(from: nil) { [weak self] in
-            guard let self else { return }
-            onEarned(nonce, self.adUnitID)
+        rewardedAd.present(from: nil) {
+            onEarned()
         }
     }
 
     func adDidDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
         rewardedAd = nil
-        state = .idle
+        if state == .presenting { state = .idle }
     }
 
     func ad(_ ad: FullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
@@ -427,8 +450,10 @@ private struct RewardedVideoSheet: View {
     @ObservedObject var controller: KonsensRewardedVideoController
     let onClaimed: () -> Void
 
-    @State private var claiming = false
-    @State private var earned = false
+    @State private var rewardNonce: UUID?
+    @State private var preparing = true
+    @State private var earnedOnDevice = false
+    @State private var verifying = false
     @State private var backendMessage: String?
 
     var body: some View {
@@ -454,28 +479,36 @@ private struct RewardedVideoSheet: View {
 
                 Spacer()
 
-                Image(systemName: "play.tv.fill")
+                Image(systemName: verifying ? "checkmark.shield.fill" : "play.tv.fill")
                     .font(.system(size: 58))
-                    .foregroundStyle(Color.konsensGold)
+                    .foregroundStyle(verifying ? Color.konsensGreen : Color.konsensGold)
 
-                Text("Une vidéo. Un drop. Une fois par jour.")
+                Text(earnedOnDevice ? "Visionnage terminé. Vérification en cours." : "Une vidéo. Un drop. Une fois par jour.")
                     .font(.system(size: 29, weight: .black, design: .rounded))
 
-                Text("La vidéo est fournie par Google Mobile Ads. En bêta, Konsens utilise le bloc rewarded de démonstration officiel Google : aucun annonceur réel n’est facturé.")
+                Text("Google UMP décide d’abord si une publicité peut être demandée. Après le visionnage, seul le callback SSV signé par Google peut autoriser Supabase à créditer les 100 K.")
                     .font(.subheadline)
                     .foregroundStyle(Color.white.opacity(0.72))
+
+                if controller.isGoogleDemoUnit {
+                    Text("MODE BÊTA · L’unité Google de démonstration valide l’affichage mais n’est pas ton bloc AdMob propriétaire. Le crédit SSV réel restera verrouillé jusqu’au branchement de ton ad unit Konsens.")
+                        .font(.caption2.bold())
+                        .foregroundStyle(Color.konsensGold)
+                        .padding(11)
+                        .background(Color.konsensGold.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                }
 
                 if let backendMessage {
                     Text(backendMessage)
                         .font(.caption.bold())
-                        .foregroundStyle(Color.konsensNegative)
+                        .foregroundStyle(backendMessage.contains("valid") ? Color.konsensGreen : Color.konsensMuted)
                 }
 
                 Spacer()
 
                 Button(action: play) {
                     HStack {
-                        if controller.state == .loading || claiming {
+                        if preparing || controller.state == .loading || verifying {
                             ProgressView().tint(.black)
                         } else {
                             Image(systemName: "play.fill")
@@ -489,28 +522,28 @@ private struct RewardedVideoSheet: View {
                     .background(canPlay ? Color.konsensGold : Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
                 }
                 .buttonStyle(.plain)
-                .disabled(!canPlay || claiming || earned)
+                .disabled(!canPlay || verifying || earnedOnDevice)
 
-                Text("Les 100 K ne sont crédités qu’après le callback de récompense de la vidéo puis validation du RPC Supabase. Fermer la vidéo trop tôt ne crédite rien.")
+                Text("Le callback local de l’iPhone ne crédite rien. Le portefeuille est modifié uniquement après vérification cryptographique ECDSA du callback AdMob et contrôle d’unicité du jour, du nonce et de la transaction.")
                     .font(.caption2)
                     .foregroundStyle(Color.konsensMuted)
             }
             .padding(22)
         }
-        .task {
-            await controller.prepare(userID: store.supabase.auth.currentUser?.id.uuidString)
-        }
+        .task { await prepareSecureReward() }
     }
 
     private var canPlay: Bool {
+        guard rewardNonce != nil, !preparing else { return false }
         if case .ready = controller.state { return true }
         return false
     }
 
     private var buttonTitle: String {
-        if claiming { return "CRÉDIT EN COURS…" }
+        if verifying { return "VALIDATION SÉCURISÉE…" }
+        if preparing { return "PRÉPARATION SÉCURISÉE…" }
         switch controller.state {
-        case .idle: return "PRÉPARER LA VIDÉO"
+        case .idle: return earnedOnDevice ? "VIDÉO TERMINÉE" : "PRÉPARER LA VIDÉO"
         case .loading: return "CHARGEMENT DE LA VIDÉO…"
         case .ready: return "REGARDER LA VIDÉO · +100 K"
         case .presenting: return "VIDÉO EN COURS…"
@@ -518,51 +551,111 @@ private struct RewardedVideoSheet: View {
         }
     }
 
+    @MainActor
+    private func prepareSecureReward() async {
+        preparing = true
+        backendMessage = nil
+
+        guard store.supabase.auth.currentUser != nil else {
+            backendMessage = "Connexion requise."
+            preparing = false
+            return
+        }
+
+        struct Params: Encodable { let p_ad_unit: String }
+        struct Row: Decodable { let reward_nonce: UUID; let expires_at: String }
+
+        do {
+            let rows: [Row] = try await store.supabase.rpc(
+                "begin_daily_reward_video",
+                params: Params(p_ad_unit: controller.adUnitID)
+            ).execute().value
+
+            guard let row = rows.first else {
+                backendMessage = "Le serveur n’a pas créé de ticket de récompense."
+                preparing = false
+                return
+            }
+
+            rewardNonce = row.reward_nonce
+            await controller.prepare(
+                userID: store.supabase.auth.currentUser?.id.uuidString.lowercased(),
+                rewardNonce: row.reward_nonce
+            )
+
+            if case .failed(let message) = controller.state {
+                backendMessage = message
+            }
+        } catch {
+            backendMessage = "Backend récompense verrouillé ou indisponible. Aucun Koin ne peut être crédité."
+        }
+
+        preparing = false
+    }
+
     private func play() {
         backendMessage = nil
-        controller.present { nonce, adUnitID in
-            Task { await claimReward(nonce: nonce, adUnitID: adUnitID) }
+        controller.present {
+            earnedOnDevice = true
+            verifying = true
+            backendMessage = "Vidéo terminée · attente du callback signé Google…"
+            Task { await waitForVerifiedSSV() }
         }
     }
 
     @MainActor
-    private func claimReward(nonce: UUID, adUnitID: String) async {
-        guard !earned else { return }
-        claiming = true
-
-        struct Params: Encodable {
-            let p_provider: String
-            let p_ad_unit: String
-            let p_reward_nonce: UUID
+    private func waitForVerifiedSSV() async {
+        guard let rewardNonce else {
+            verifying = false
+            backendMessage = "Ticket de récompense introuvable. Aucun crédit effectué."
+            return
         }
+
+        struct Params: Encodable { let p_reward_nonce: UUID }
         struct Row: Decodable {
+            let status: String
+            let verified_at: String?
             let claimed: Bool
-            let amount: Int
-            let balance: Double
-            let streak: Int
         }
 
-        do {
-            let rows: [Row] = try await store.supabase.rpc(
-                "claim_daily_reward_video",
-                params: Params(p_provider: "admob", p_ad_unit: adUnitID, p_reward_nonce: nonce)
-            ).execute().value
+        for _ in 0..<15 {
+            do {
+                let rows: [Row] = try await store.supabase.rpc(
+                    "get_my_reward_video_intent",
+                    params: Params(p_reward_nonce: rewardNonce)
+                ).execute().value
 
-            guard let row = rows.first else {
-                backendMessage = "Réponse serveur vide. Aucun crédit n’a été ajouté."
-                claiming = false
-                return
+                if let row = rows.first {
+                    if row.status == "verified" {
+                        verifying = false
+                        await store.refreshFinance()
+                        if row.claimed {
+                            store.showToast("+100 Koins · vidéo validée par Google ✓")
+                        } else {
+                            store.showToast("Drop déjà récupéré aujourd’hui")
+                        }
+                        onClaimed()
+                        dismiss()
+                        return
+                    }
+
+                    if row.status == "expired" || row.status == "rejected" {
+                        verifying = false
+                        backendMessage = "La validation serveur a été refusée. Aucun Koin n’a été ajouté."
+                        return
+                    }
+                }
+            } catch {
+                // A transient polling error does not authorize a client-side fallback.
             }
 
-            earned = true
-            store.showToast(row.claimed ? "+\(row.amount) Koins · série \(row.streak) 🔥" : "Drop déjà récupéré aujourd’hui")
-            onClaimed()
-            dismiss()
-        } catch {
-            backendMessage = "La vidéo a été validée, mais le backend Konsens n’est pas encore activé sur ce projet Supabase."
-            store.showToast("Drop non crédité · backend indisponible")
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
         }
-        claiming = false
+
+        verifying = false
+        backendMessage = controller.isGoogleDemoUnit
+            ? "Vidéo de démonstration terminée. Aucun SSV de production n’a été reçu : 0 K crédité."
+            : "Validation Google toujours en cours. Tu peux fermer : le serveur créditera uniquement si le SSV signé arrive et reste valide."
     }
 }
 
