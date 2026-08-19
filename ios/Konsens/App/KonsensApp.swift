@@ -12,7 +12,14 @@ struct KonsensApp: App {
                     await KonsensPrivacyConsentManager.shared.gatherConsent()
                 }
                 .onOpenURL { url in
-                    Task { try? await store.supabase.auth.session(from: url) }
+                    Task {
+                        do {
+                            try await store.supabase.auth.session(from: url)
+                            await store.restoreSession()
+                        } catch {
+                            store.showToast("Lien de connexion invalide ou expiré")
+                        }
+                    }
                 }
         }
     }
