@@ -78,3 +78,13 @@ final class KonsensPrivacyConsentManager: ObservableObject {
         MobileAds.shared.start()
     }
 }
+
+// Compatibility shim for the rewarded SSV integration.
+// Google Mobile Ads exposes the payload as `customRewardString`.
+// Keep the existing call site compiling while forwarding to the official API.
+extension ServerSideVerificationOptions {
+    var customRewardText: String? {
+        get { customRewardString }
+        set { customRewardString = newValue }
+    }
+}
