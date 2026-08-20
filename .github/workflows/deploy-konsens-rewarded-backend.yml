@@ -1,0 +1,203 @@
+name: Deploy Konsens Rewarded Backend
+
+on:
+  push:
+    branches:
+      - locked/rewarded-ump-ssv
+    paths:
+      - "supabase/config.toml"
+      - "supabase/functions/admob-reward-ssv/**"
+      - "supabase/migrations/20260819140500_game_first_daily_reward_league_social.sql"
+      - "supabase/migrations/20260819144500_rewarded_video_admob.sql"
+      - "supabase/migrations/20260819144600_lock_reward_credit_paths.sql"
+      - "supabase/migrations/20260819144700_bind_admob_production_ids.sql"
+      - ".github/workflows/deploy-konsens-rewarded-backend.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "supabase/config.toml"
+      - "supabase/functions/admob-reward-ssv/**"
+      - "supabase/migrations/20260819140500_game_first_daily_reward_league_social.sql"
+      - "supabase/migrations/20260819144500_rewarded_video_admob.sql"
+      - "supabase/migrations/20260819144600_lock_reward_credit_paths.sql"
+      - "supabase/migrations/20260819144700_bind_admob_production_ids.sql"
+      - ".github/workflows/deploy-konsens-rewarded-backend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: konsens-rewarded-backend-production
+  cancel-in-progress: false
+
+env:
+  EXPECTED_PROJECT_REF: mxuevsspybxoovsutsbs
+
+jobs:
+  deploy:
+    name: Verify and deploy rewarded backend
+    if: github.event_name != 'pull_request' || github.head_ref == 'locked/rewarded-ump-ssv'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.KONSENS_SUPABASE_ACCESS_TOKEN }}
+      KONSENS_SUPABASE_PROJECT_ID: ${{ secrets.KONSENS_SUPABASE_PROJECT_ID }}
+
+    steps:
+      - name: Checkout locked feature snapshot
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Refuse missing or wrong Supabase target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_ACCESS_TOKEN:-}" || { echo "::error::KONSENS_SUPABASE_ACCESS_TOKEN is missing"; exit 1; }
+          test -n "${KONSENS_SUPABASE_PROJECT_ID:-}" || { echo "::error::KONSENS_SUPABASE_PROJECT_ID is missing"; exit 1; }
+
+          if [[ "$KONSENS_SUPABASE_PROJECT_ID" != "$EXPECTED_PROJECT_REF" ]]; then
+            echo "::error::Refusing deployment: configured project ref does not match the pinned Konsens project."
+            exit 1
+          fi
+
+          grep -q "project_id = \"${EXPECTED_PROJECT_REF}\"" supabase/config.toml || {
+            echo "::error::supabase/config.toml is not pinned to the expected Konsens project."
+            exit 1
+          }
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf
+        with:
+          version: latest
+
+      - name: Link only to Konsens production
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset SUPABASE_DB_PASSWORD || true
+          supabase link --project-ref "$EXPECTED_PROJECT_REF"
+
+      - name: Show migration history without mutating it
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset SUPABASE_DB_PASSWORD || true
+          supabase migration list --linked
+
+      - name: Preflight required Konsens schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          query="select 1 / (case when
+            to_regclass('public.profiles') is not null
+            and to_regclass('public.wallets') is not null
+            and to_regclass('public.allocations') is not null
+            and to_regclass('public.ledger_entries') is not null
+            and to_regclass('public.ad_slots') is not null
+            and to_regclass('public.ad_events') is not null
+            and to_regclass('public.notification_events') is not null
+            and to_regclass('public.leagues') is not null
+            and to_regclass('public.league_members') is not null
+            and to_regclass('public.positions') is not null
+            and to_regclass('public.trade_orders') is not null
+            then 1 else 0 end) as konsens_reward_preflight;"
+
+          jq -n --arg query "$query" '{query:$query,read_only:true}' > /tmp/preflight.json
+          curl --fail-with-body --silent --show-error \
+            -X POST "https://api.supabase.com/v1/projects/${EXPECTED_PROJECT_REF}/database/query" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/preflight.json | tee /tmp/preflight-response.json
+
+      - name: Apply only allow-listed rewarded SQL through Management API
+        shell: bash
+        run: |
+          set -euo pipefail
+          migrations=(
+            "supabase/migrations/20260819140500_game_first_daily_reward_league_social.sql"
+            "supabase/migrations/20260819144500_rewarded_video_admob.sql"
+            "supabase/migrations/20260819144600_lock_reward_credit_paths.sql"
+            "supabase/migrations/20260819144700_bind_admob_production_ids.sql"
+          )
+
+          for file in "${migrations[@]}"; do
+            echo "Applying approved migration: ${file}"
+            # PostgreSQL treats POSITION as a keyword in a RETURNS TABLE signature.
+            # Quote that output-column identifier while preserving the JSON/RPC field name.
+            sql="$(sed 's/^  position integer,/  "position" integer,/' "$file")"
+            wrapped_sql="$(printf 'begin;\n%s\ncommit;\n' "$sql")"
+            jq -n --arg query "$wrapped_sql" '{query:$query,read_only:false}' > /tmp/migration.json
+
+            status="$(curl --silent --show-error \
+              --output /tmp/migration-response.json \
+              --write-out '%{http_code}' \
+              -X POST "https://api.supabase.com/v1/projects/${EXPECTED_PROJECT_REF}/database/query" \
+              -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data-binary @/tmp/migration.json)"
+
+            cat /tmp/migration-response.json
+            if [[ ! "$status" =~ ^2 ]]; then
+              echo "::error::Approved migration ${file} failed with HTTP ${status}. No later rewarded migration was attempted."
+              exit 1
+            fi
+          done
+
+      - name: Verify reward-credit lockdown in database
+        shell: bash
+        run: |
+          set -euo pipefail
+          query="select 1 / (case when
+            to_regclass('public.game_daily_rewards') is not null
+            and to_regclass('public.admob_reward_intents') is not null
+            and to_regprocedure('public.begin_daily_reward_video(text)') is not null
+            and to_regprocedure('public.get_my_reward_video_intent(uuid)') is not null
+            and to_regprocedure('public.finalize_daily_reward_video_ssv(uuid,uuid,text,text,bigint,text,text,numeric)') is not null
+            and to_regprocedure('public.claim_daily_reward(bigint)') is null
+            and to_regprocedure('public.claim_daily_reward_video(text,text,uuid)') is null
+            and exists(select 1 from pg_constraint where conname='admob_reward_intents_known_ad_unit_ck')
+            and exists(select 1 from pg_constraint where conname='game_daily_rewards_owned_ad_unit_ck')
+            then 1 else 0 end) as rewarded_backend_locked;"
+
+          jq -n --arg query "$query" '{query:$query,read_only:true}' > /tmp/verify-db.json
+          curl --fail-with-body --silent --show-error \
+            -X POST "https://api.supabase.com/v1/projects/${EXPECTED_PROJECT_REF}/database/query" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/verify-db.json | tee /tmp/verify-db-response.json
+
+      - name: Deploy AdMob SSV Edge Function
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase functions deploy admob-reward-ssv \
+            --project-ref "$EXPECTED_PROJECT_REF" \
+            --no-verify-jwt
+
+      - name: Verify public SSV endpoint is reachable
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://${EXPECTED_PROJECT_REF}.supabase.co/functions/v1/admob-reward-ssv"
+          status="$(curl --silent --show-error --output /tmp/ssv-probe.json --write-out '%{http_code}' "$endpoint")"
+          cat /tmp/ssv-probe.json
+
+          if [[ "$status" != "400" ]]; then
+            echo "::error::SSV endpoint probe returned HTTP ${status}; expected 400 from an unsigned empty request."
+            exit 1
+          fi
+
+          grep -q 'invalid_ssv_parameter_order' /tmp/ssv-probe.json || {
+            echo "::error::SSV endpoint did not execute the Konsens verifier."
+            exit 1
+          }
+
+      - name: Deployment summary
+        shell: bash
+        run: |
+          echo "Konsens rewarded backend deployed to pinned project ${EXPECTED_PROJECT_REF}."
+          echo "Historical migration drift was preserved; only the four allow-listed rewarded SQL files were applied."
+          echo "Only Google-signed SSV callbacks can finalize the daily +100 Koins credit."

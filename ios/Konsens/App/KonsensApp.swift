@@ -8,6 +8,9 @@ struct KonsensApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(store)
+                .task {
+                    await KonsensPrivacyConsentManager.shared.gatherConsent()
+                }
                 .onOpenURL { url in
                     Task {
                         do {

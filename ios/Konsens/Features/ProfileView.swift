@@ -3,6 +3,7 @@ import SwiftUI
 struct ProfileView: View {
     @EnvironmentObject private var store: AppStore
     @ObservedObject private var notifications = NotificationManager.shared
+    @ObservedObject private var privacy = KonsensPrivacyConsentManager.shared
     @AppStorage("konsens_finance_pro_enabled") private var financeProEnabled = false
     @State private var showNetwork = false
 
@@ -15,6 +16,7 @@ struct ProfileView: View {
                 academyCard
                 notificationsCard
                 transparencyCard
+                privacyCard
                 securityCard
 
                 Button(role: .destructive) {
@@ -239,6 +241,61 @@ struct ProfileView: View {
             .panel()
         }
         .buttonStyle(.plain)
+    }
+
+    private var privacyCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("CONFIDENTIALITÉ & PUBLICITÉ")
+                        .font(.system(size: 8, weight: .black, design: .rounded))
+                        .tracking(0.9)
+                        .foregroundStyle(Color.konsensGreen)
+                    Text("Tes choix publicitaires")
+                        .font(.headline)
+                }
+                Spacer()
+                Image(systemName: privacy.canRequestAds ? "checkmark.shield.fill" : "hand.raised.fill")
+                    .foregroundStyle(privacy.canRequestAds ? Color.konsensGreen : Color.konsensGold)
+            }
+
+            Text(privacy.canRequestAds
+                 ? "Les demandes publicitaires respectent l’état de consentement Google UMP."
+                 : "Konsens ne charge pas de publicité tant que la plateforme de consentement ne l’autorise pas.")
+                .font(.caption)
+                .foregroundStyle(Color.konsensMuted)
+
+            if privacy.isPrivacyOptionsRequired {
+                Button {
+                    Task {
+                        do {
+                            try await privacy.presentPrivacyOptions()
+                        } catch {
+                            store.showToast("Options de confidentialité indisponibles")
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: "slider.horizontal.3")
+                        Text("GÉRER MES CHOIX PUBLICITAIRES")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                    }
+                    .font(.caption.bold())
+                    .padding(12)
+                    .foregroundStyle(.white)
+                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 13))
+                }
+                .buttonStyle(.plain)
+            }
+
+            if let message = privacy.lastError, !message.isEmpty {
+                Text("Consentement : \(message)")
+                    .font(.caption2)
+                    .foregroundStyle(Color.konsensGold)
+            }
+        }
+        .panel()
     }
 
     private var securityCard: some View {
