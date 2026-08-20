@@ -126,7 +126,7 @@ jobs:
           for file in "${migrations[@]}"; do
             echo "Applying approved migration: ${file}"
             sql="$(cat "$file")"
-            wrapped_sql="begin;\n${sql}\ncommit;"
+            wrapped_sql="$(printf 'begin;\n%s\ncommit;\n' "$sql")"
             jq -n --arg query "$wrapped_sql" '{query:$query,read_only:false}' > /tmp/migration.json
 
             status="$(curl --silent --show-error \
