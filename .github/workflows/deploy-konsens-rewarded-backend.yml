@@ -128,12 +128,20 @@ jobs:
             sql="$(cat "$file")"
             wrapped_sql="begin;\n${sql}\ncommit;"
             jq -n --arg query "$wrapped_sql" '{query:$query,read_only:false}' > /tmp/migration.json
-            curl --fail-with-body --silent --show-error \
+
+            status="$(curl --silent --show-error \
+              --output /tmp/migration-response.json \
+              --write-out '%{http_code}' \
               -X POST "https://api.supabase.com/v1/projects/${EXPECTED_PROJECT_REF}/database/query" \
               -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
               -H "Content-Type: application/json" \
-              --data-binary @/tmp/migration.json > /tmp/migration-response.json
+              --data-binary @/tmp/migration.json)"
+
             cat /tmp/migration-response.json
+            if [[ ! "$status" =~ ^2 ]]; then
+              echo "::error::Approved migration ${file} failed with HTTP ${status}. No later rewarded migration was attempted."
+              exit 1
+            fi
           done
 
       - name: Verify reward-credit lockdown in database
