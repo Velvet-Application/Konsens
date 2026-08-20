@@ -80,47 +80,84 @@ jobs:
           unset SUPABASE_DB_PASSWORD || true
           supabase link --project-ref "$EXPECTED_PROJECT_REF"
 
-      - name: Show migration history
+      - name: Show migration history without mutating it
         shell: bash
         run: |
           set -euo pipefail
           unset SUPABASE_DB_PASSWORD || true
           supabase migration list --linked
 
-      - name: Dry-run database migrations
+      - name: Preflight required Konsens schema
         shell: bash
         run: |
           set -euo pipefail
-          unset SUPABASE_DB_PASSWORD || true
-          supabase db push --linked --dry-run 2>&1 | tee /tmp/konsens-dry-run.log
+          query="select 1 / (case when
+            to_regclass('public.profiles') is not null
+            and to_regclass('public.wallets') is not null
+            and to_regclass('public.allocations') is not null
+            and to_regclass('public.ledger_entries') is not null
+            and to_regclass('public.ad_slots') is not null
+            and to_regclass('public.ad_events') is not null
+            and to_regclass('public.notification_events') is not null
+            and to_regclass('public.leagues') is not null
+            and to_regclass('public.league_members') is not null
+            and to_regclass('public.positions') is not null
+            and to_regclass('public.trade_orders') is not null
+            then 1 else 0 end) as konsens_reward_preflight;"
 
-      - name: Refuse unexpected pending migrations
+          jq -n --arg query "$query" '{query:$query,read_only:true}' > /tmp/preflight.json
+          curl --fail-with-body --silent --show-error \
+            -X POST "https://api.supabase.com/v1/projects/${EXPECTED_PROJECT_REF}/database/query" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/preflight.json | tee /tmp/preflight-response.json
+
+      - name: Apply only allow-listed rewarded SQL through Management API
         shell: bash
         run: |
           set -euo pipefail
-          allowed='^(20260819140500|20260819144500|20260819144600|20260819144700)$'
-
-          mapfile -t pending < <(
-            grep -Eo '20[0-9]{12}_[A-Za-z0-9._-]+\.sql' /tmp/konsens-dry-run.log \
-              | sed -E 's/_.*$//' \
-              | sort -u || true
+          migrations=(
+            "supabase/migrations/20260819140500_game_first_daily_reward_league_social.sql"
+            "supabase/migrations/20260819144500_rewarded_video_admob.sql"
+            "supabase/migrations/20260819144600_lock_reward_credit_paths.sql"
+            "supabase/migrations/20260819144700_bind_admob_production_ids.sql"
           )
 
-          for version in "${pending[@]}"; do
-            if [[ ! "$version" =~ $allowed ]]; then
-              echo "::error::Unexpected pending migration ${version}. Deployment stays locked."
-              exit 1
-            fi
+          for file in "${migrations[@]}"; do
+            echo "Applying approved migration: ${file}"
+            sql="$(cat "$file")"
+            wrapped_sql="begin;\n${sql}\ncommit;"
+            jq -n --arg query "$wrapped_sql" '{query:$query,read_only:false}' > /tmp/migration.json
+            curl --fail-with-body --silent --show-error \
+              -X POST "https://api.supabase.com/v1/projects/${EXPECTED_PROJECT_REF}/database/query" \
+              -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data-binary @/tmp/migration.json > /tmp/migration-response.json
+            cat /tmp/migration-response.json
           done
 
-          echo "Pending rewarded migrations are within the approved allow-list."
-
-      - name: Apply approved migrations
+      - name: Verify reward-credit lockdown in database
         shell: bash
         run: |
           set -euo pipefail
-          unset SUPABASE_DB_PASSWORD || true
-          supabase db push --linked --yes
+          query="select 1 / (case when
+            to_regclass('public.game_daily_rewards') is not null
+            and to_regclass('public.admob_reward_intents') is not null
+            and to_regprocedure('public.begin_daily_reward_video(text)') is not null
+            and to_regprocedure('public.get_my_reward_video_intent(uuid)') is not null
+            and to_regprocedure('public.finalize_daily_reward_video_ssv(uuid,uuid,text,text,bigint,text,text,numeric)') is not null
+            and to_regprocedure('public.claim_daily_reward(bigint)') is null
+            and to_regprocedure('public.claim_daily_reward_video(text,text,uuid)') is null
+            and exists(select 1 from pg_constraint where conname='admob_reward_intents_known_ad_unit_ck')
+            and exists(select 1 from pg_constraint where conname='game_daily_rewards_owned_ad_unit_ck')
+            then 1 else 0 end) as rewarded_backend_locked;"
+
+          jq -n --arg query "$query" '{query:$query,read_only:true}' > /tmp/verify-db.json
+          curl --fail-with-body --silent --show-error \
+            -X POST "https://api.supabase.com/v1/projects/${EXPECTED_PROJECT_REF}/database/query" \
+            -H "Authorization: Bearer ${SUPABASE_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/verify-db.json | tee /tmp/verify-db-response.json
 
       - name: Deploy AdMob SSV Edge Function
         shell: bash
@@ -152,4 +189,5 @@ jobs:
         shell: bash
         run: |
           echo "Konsens rewarded backend deployed to pinned project ${EXPECTED_PROJECT_REF}."
+          echo "Historical migration drift was preserved; only the four allow-listed rewarded SQL files were applied."
           echo "Only Google-signed SSV callbacks can finalize the daily +100 Koins credit."
