@@ -12,6 +12,17 @@ on:
       - "supabase/migrations/20260819144600_lock_reward_credit_paths.sql"
       - "supabase/migrations/20260819144700_bind_admob_production_ids.sql"
       - ".github/workflows/deploy-konsens-rewarded-backend.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "supabase/config.toml"
+      - "supabase/functions/admob-reward-ssv/**"
+      - "supabase/migrations/20260819140500_game_first_daily_reward_league_social.sql"
+      - "supabase/migrations/20260819144500_rewarded_video_admob.sql"
+      - "supabase/migrations/20260819144600_lock_reward_credit_paths.sql"
+      - "supabase/migrations/20260819144700_bind_admob_production_ids.sql"
+      - ".github/workflows/deploy-konsens-rewarded-backend.yml"
   workflow_dispatch:
 
 permissions:
@@ -27,6 +38,7 @@ env:
 jobs:
   deploy:
     name: Verify and deploy rewarded backend
+    if: github.event_name != 'pull_request' || github.head_ref == 'locked/rewarded-ump-ssv'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
