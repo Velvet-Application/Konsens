@@ -125,7 +125,9 @@ jobs:
 
           for file in "${migrations[@]}"; do
             echo "Applying approved migration: ${file}"
-            sql="$(cat "$file")"
+            # PostgreSQL treats POSITION as a keyword in a RETURNS TABLE signature.
+            # Quote that output-column identifier while preserving the JSON/RPC field name.
+            sql="$(sed 's/^  position integer,/  "position" integer,/' "$file")"
             wrapped_sql="$(printf 'begin;\n%s\ncommit;\n' "$sql")"
             jq -n --arg query "$wrapped_sql" '{query:$query,read_only:false}' > /tmp/migration.json
 
