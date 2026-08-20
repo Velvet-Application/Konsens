@@ -1,0 +1,141 @@
+name: Deploy Konsens Rewarded Backend
+
+on:
+  push:
+    branches:
+      - locked/rewarded-ump-ssv
+    paths:
+      - "supabase/config.toml"
+      - "supabase/functions/admob-reward-ssv/**"
+      - "supabase/migrations/20260819140500_game_first_daily_reward_league_social.sql"
+      - "supabase/migrations/20260819144500_rewarded_video_admob.sql"
+      - "supabase/migrations/20260819144600_lock_reward_credit_paths.sql"
+      - "supabase/migrations/20260819144700_bind_admob_production_ids.sql"
+      - ".github/workflows/deploy-konsens-rewarded-backend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: konsens-rewarded-backend-production
+  cancel-in-progress: false
+
+env:
+  EXPECTED_PROJECT_REF: mxuevsspybxoovsutsbs
+
+jobs:
+  deploy:
+    name: Verify and deploy rewarded backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.KONSENS_SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.KONSENS_SUPABASE_DB_PASSWORD }}
+      KONSENS_SUPABASE_PROJECT_ID: ${{ secrets.KONSENS_SUPABASE_PROJECT_ID }}
+
+    steps:
+      - name: Checkout locked feature snapshot
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Refuse missing or wrong Supabase target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_ACCESS_TOKEN:-}" || { echo "::error::KONSENS_SUPABASE_ACCESS_TOKEN is missing"; exit 1; }
+          test -n "${SUPABASE_DB_PASSWORD:-}" || { echo "::error::KONSENS_SUPABASE_DB_PASSWORD is missing"; exit 1; }
+          test -n "${KONSENS_SUPABASE_PROJECT_ID:-}" || { echo "::error::KONSENS_SUPABASE_PROJECT_ID is missing"; exit 1; }
+
+          if [[ "$KONSENS_SUPABASE_PROJECT_ID" != "$EXPECTED_PROJECT_REF" ]]; then
+            echo "::error::Refusing deployment: configured project ref does not match the pinned Konsens project."
+            exit 1
+          fi
+
+          grep -q "project_id = \"${EXPECTED_PROJECT_REF}\"" supabase/config.toml || {
+            echo "::error::supabase/config.toml is not pinned to the expected Konsens project."
+            exit 1
+          }
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf
+        with:
+          version: latest
+
+      - name: Link only to Konsens production
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase link --project-ref "$EXPECTED_PROJECT_REF"
+
+      - name: Show migration history
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase migration list --linked
+
+      - name: Dry-run database migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase db push --linked --dry-run 2>&1 | tee /tmp/konsens-dry-run.log
+
+      - name: Refuse unexpected pending migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          allowed='^(20260819140500|20260819144500|20260819144600|20260819144700)$'
+
+          mapfile -t pending < <(
+            grep -Eo '20[0-9]{12}_[A-Za-z0-9._-]+\.sql' /tmp/konsens-dry-run.log \
+              | sed -E 's/_.*$//' \
+              | sort -u || true
+          )
+
+          for version in "${pending[@]}"; do
+            if [[ ! "$version" =~ $allowed ]]; then
+              echo "::error::Unexpected pending migration ${version}. Deployment stays locked."
+              exit 1
+            fi
+          done
+
+          echo "Pending rewarded migrations are within the approved allow-list."
+
+      - name: Apply approved migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase db push --linked --yes
+
+      - name: Deploy AdMob SSV Edge Function
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase functions deploy admob-reward-ssv \
+            --project-ref "$EXPECTED_PROJECT_REF" \
+            --no-verify-jwt
+
+      - name: Verify public SSV endpoint is reachable
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://${EXPECTED_PROJECT_REF}.supabase.co/functions/v1/admob-reward-ssv"
+          status="$(curl --silent --show-error --output /tmp/ssv-probe.json --write-out '%{http_code}' "$endpoint")"
+          cat /tmp/ssv-probe.json
+
+          if [[ "$status" != "400" ]]; then
+            echo "::error::SSV endpoint probe returned HTTP ${status}; expected 400 from an unsigned empty request."
+            exit 1
+          fi
+
+          grep -q 'invalid_ssv_parameter_order' /tmp/ssv-probe.json || {
+            echo "::error::SSV endpoint did not execute the Konsens verifier."
+            exit 1
+          }
+
+      - name: Deployment summary
+        shell: bash
+        run: |
+          echo "Konsens rewarded backend deployed to pinned project ${EXPECTED_PROJECT_REF}."
+          echo "Only Google-signed SSV callbacks can finalize the daily +100 Koins credit."
