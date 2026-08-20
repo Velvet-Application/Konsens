@@ -43,7 +43,6 @@ jobs:
     timeout-minutes: 15
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.KONSENS_SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.KONSENS_SUPABASE_DB_PASSWORD }}
       KONSENS_SUPABASE_PROJECT_ID: ${{ secrets.KONSENS_SUPABASE_PROJECT_ID }}
 
     steps:
@@ -57,7 +56,6 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${SUPABASE_ACCESS_TOKEN:-}" || { echo "::error::KONSENS_SUPABASE_ACCESS_TOKEN is missing"; exit 1; }
-          test -n "${SUPABASE_DB_PASSWORD:-}" || { echo "::error::KONSENS_SUPABASE_DB_PASSWORD is missing"; exit 1; }
           test -n "${KONSENS_SUPABASE_PROJECT_ID:-}" || { echo "::error::KONSENS_SUPABASE_PROJECT_ID is missing"; exit 1; }
 
           if [[ "$KONSENS_SUPABASE_PROJECT_ID" != "$EXPECTED_PROJECT_REF" ]]; then
@@ -79,18 +77,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          unset SUPABASE_DB_PASSWORD || true
           supabase link --project-ref "$EXPECTED_PROJECT_REF"
 
       - name: Show migration history
         shell: bash
         run: |
           set -euo pipefail
+          unset SUPABASE_DB_PASSWORD || true
           supabase migration list --linked
 
       - name: Dry-run database migrations
         shell: bash
         run: |
           set -euo pipefail
+          unset SUPABASE_DB_PASSWORD || true
           supabase db push --linked --dry-run 2>&1 | tee /tmp/konsens-dry-run.log
 
       - name: Refuse unexpected pending migrations
@@ -118,6 +119,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          unset SUPABASE_DB_PASSWORD || true
           supabase db push --linked --yes
 
       - name: Deploy AdMob SSV Edge Function
