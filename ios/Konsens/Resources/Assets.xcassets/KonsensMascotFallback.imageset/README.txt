@@ -1,1 +1,0 @@
-Binary fallback image is stored in this imageset. It is the approved Konsens mascot render used only when the rigged KonsensMascot.usdz is not yet bundled.
