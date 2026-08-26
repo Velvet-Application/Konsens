@@ -6,7 +6,7 @@ struct KonsensApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            KonsensGameRootView()
                 .environmentObject(store)
                 .onOpenURL { url in
                     Task {
