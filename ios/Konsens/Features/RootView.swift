@@ -4,19 +4,15 @@ import LocalAuthentication
 struct RootView: View {
     @EnvironmentObject private var store: AppStore
     @ObservedObject private var notifications = NotificationManager.shared
-    @AppStorage("konsens_finance_pro_enabled") private var financeProEnabled = false
     @State private var unlocked = false
     @State private var biometricAttempted = false
 
-    private var isFinancePro: Bool {
-        financeProEnabled && store.subscriptionTier == "premium"
-    }
-
     var body: some View {
         ZStack {
-            WorldBackdrop(tab: store.selectedTab, financePro: isFinancePro).ignoresSafeArea()
+            GameWorldBackdrop(tab: store.selectedTab).ignoresSafeArea()
+
             if store.isLoading {
-                ProgressView().tint(Color.konsensGreen)
+                ProgressView().tint(Color.konsensGold)
             } else if !store.isAuthenticated {
                 AuthView()
             } else if !store.onboardingComplete {
@@ -36,26 +32,18 @@ struct RootView: View {
                         .padding(.vertical, 11)
                         .background(.ultraThinMaterial, in: Capsule())
                         .overlay(Capsule().stroke(Color.white.opacity(0.09)))
-                        .padding(.bottom, 98)
+                        .padding(.bottom, 100)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .preferredColorScheme(.dark)
-        .animation(.easeInOut(duration: 0.28), value: store.selectedTab)
+        .animation(.easeInOut(duration: 0.24), value: store.selectedTab)
         .onChange(of: store.isAuthenticated) { _, authenticated in
             if !authenticated {
                 unlocked = false
                 biometricAttempted = false
                 notifications.stop()
-            }
-        }
-        .onChange(of: financeProEnabled) { _, enabled in
-            if enabled && store.subscriptionTier != "premium" {
-                financeProEnabled = false
-            }
-            if enabled && store.selectedTab == .league {
-                store.selectedTab = .wealth
             }
         }
         .onOpenURL { route($0) }
@@ -73,27 +61,20 @@ struct RootView: View {
         ZStack {
             Group {
                 switch store.selectedTab {
-                case .wealth:
-                    if isFinancePro { FinanceLegacyHomeView() } else { ArenaView() }
-                case .play:
-                    if isFinancePro { MarketsView() } else { GamePlayView() }
-                case .invest:
-                    if isFinancePro { LeagueView() } else { GameInvestView() }
-                case .league:
-                    LeagueSocialView()
-                case .learn:
-                    AcademyNativeView()
-                case .profile:
-                    ProfileView()
+                case .wealth: ArenaView()
+                case .play: GamePlayView()
+                case .invest: GameInvestView()
+                case .league: LeagueSocialView()
+                case .learn: AcademyNativeView()
+                case .profile: ProfileView()
                 }
             }
 
             VStack(spacing: 0) {
-                FloatingHeader(financePro: isFinancePro, notifications: notifications)
-                GameModeRibbon(financePro: isFinancePro)
-                    .padding(.top, 7)
+                GameHeader(notifications: notifications)
+                GameRibbon().padding(.top, 7)
                 Spacer()
-                FloatingDock(financePro: isFinancePro)
+                GameDock()
             }
             .padding(.horizontal, 12)
             .padding(.top, 8)
@@ -107,8 +88,8 @@ struct RootView: View {
         case "play", "bet": store.selectedTab = .play
         case "invest", "finance": store.selectedTab = .invest
         case "league": store.selectedTab = .league
-        case "learn", "academy": store.selectedTab = .learn
         case "profile", "notifications", "blockchain": store.selectedTab = .profile
+        case "learn", "academy": store.selectedTab = .learn
         default: store.selectedTab = .wealth
         }
     }
@@ -124,53 +105,32 @@ struct RootView: View {
         }
         context.evaluatePolicy(
             .deviceOwnerAuthenticationWithBiometrics,
-            localizedReason: "Déverrouiller ton patrimoine Konsens"
+            localizedReason: "Retrouver tes Koins et ta ligue"
         ) { success, _ in
             DispatchQueue.main.async { unlocked = success }
         }
     }
 }
 
-private struct WorldBackdrop: View {
+private struct GameWorldBackdrop: View {
     let tab: AppTab
-    let financePro: Bool
 
     var body: some View {
         ZStack {
             Color.konsensBackground
+            RadialGradient(colors: [accent.opacity(0.34), .clear], center: .topTrailing, startRadius: 0, endRadius: 470)
+            RadialGradient(colors: [Color.konsensPink.opacity(0.12), .clear], center: .centerLeading, startRadius: 0, endRadius: 380)
+            RadialGradient(colors: [Color.konsensGold.opacity(0.09), .clear], center: .bottomTrailing, startRadius: 0, endRadius: 320)
 
-            if financePro {
-                LinearGradient(
-                    colors: [Color.konsensBlue.opacity(0.11), .clear],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                FinanceGrid().opacity(0.38)
-            } else {
-                RadialGradient(
-                    colors: [accent.opacity(0.30), .clear],
-                    center: .topTrailing,
-                    startRadius: 0,
-                    endRadius: 430
-                )
-                RadialGradient(
-                    colors: [Color.konsensGreen.opacity(0.10), .clear],
-                    center: .bottomLeading,
-                    startRadius: 0,
-                    endRadius: 360
-                )
-                Circle()
-                    .stroke(accent.opacity(0.10), lineWidth: 1)
-                    .frame(width: 330, height: 330)
-                    .offset(x: 180, y: -340)
-            }
+            Circle().stroke(accent.opacity(0.08), lineWidth: 1).frame(width: 330, height: 330).offset(x: 180, y: -340)
+            Circle().stroke(Color.konsensGold.opacity(0.06), lineWidth: 1).frame(width: 220, height: 220).offset(x: -170, y: 330)
         }
     }
 
     private var accent: Color {
         switch tab {
         case .wealth: return Color.konsensViolet
-        case .play: return Color.konsensViolet
+        case .play: return Color.konsensPink
         case .invest: return Color.konsensBlue
         case .league: return Color.konsensGold
         case .learn: return Color.konsensGreen
@@ -179,54 +139,34 @@ private struct WorldBackdrop: View {
     }
 }
 
-private struct FinanceGrid: View {
-    var body: some View {
-        Canvas { context, size in
-            var path = Path()
-            let step: CGFloat = 34
-            var x: CGFloat = 0
-            while x < size.width {
-                path.move(to: CGPoint(x: x, y: 0))
-                path.addLine(to: CGPoint(x: x, y: size.height))
-                x += step
-            }
-            var y: CGFloat = 0
-            while y < size.height {
-                path.move(to: CGPoint(x: 0, y: y))
-                path.addLine(to: CGPoint(x: size.width, y: y))
-                y += step
-            }
-            context.stroke(path, with: .color(Color.konsensBlue.opacity(0.08)), lineWidth: 0.5)
-        }
-    }
-}
-
-private struct FloatingHeader: View {
+private struct GameHeader: View {
     @EnvironmentObject private var store: AppStore
-    let financePro: Bool
     @ObservedObject var notifications: NotificationManager
 
     var body: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 8) {
-                Image("KonsensLogo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 31, height: 31)
-                    .clipShape(RoundedRectangle(cornerRadius: 9))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(financePro ? "KONSENS PRO" : "KONSENS GAME")
-                        .font(.system(size: 8, weight: .black, design: financePro ? .monospaced : .rounded))
-                        .tracking(0.8)
-                        .foregroundStyle(financePro ? Color.konsensBlue : Color.konsensGreen)
-                    Text("@\(store.username)")
-                        .font(.system(size: 8, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color.konsensMuted)
+            Button { store.selectedTab = .wealth } label: {
+                HStack(spacing: 8) {
+                    Image("KonsensLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 31, height: 31)
+                        .clipShape(RoundedRectangle(cornerRadius: 9))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("KONSENS")
+                            .font(.system(size: 9, weight: .black, design: .rounded))
+                            .tracking(1)
+                            .foregroundStyle(Color.konsensGold)
+                        Text("@\(store.username)")
+                            .font(.system(size: 8, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.konsensMuted)
+                    }
                 }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 7)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
             }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 7)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .buttonStyle(.plain)
 
             Spacer()
 
@@ -242,7 +182,7 @@ private struct FloatingHeader: View {
                             .font(.system(size: 7, weight: .black))
                             .foregroundStyle(.white)
                             .frame(width: 15, height: 15)
-                            .background(Color.konsensViolet, in: Circle())
+                            .background(Color.konsensPink, in: Circle())
                             .offset(x: 13, y: -13)
                     }
                 }
@@ -250,97 +190,94 @@ private struct FloatingHeader: View {
             .buttonStyle(.plain)
 
             Button { store.selectedTab = .profile } label: {
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text(financePro ? "PATRIMOINE" : "SCORE")
-                        .font(.system(size: 6, weight: .black, design: .rounded))
-                        .tracking(0.8)
-                        .foregroundStyle(Color.konsensMuted)
+                HStack(spacing: 6) {
+                    Image(systemName: "circle.hexagongrid.fill")
+                        .foregroundStyle(Color.konsensGold)
                     Text(String(format: "%.0f K", store.wealth.total))
-                        .font(.subheadline.monospacedDigit().bold())
+                        .font(.subheadline.monospacedDigit().black())
                         .foregroundStyle(.white)
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.vertical, 9)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.konsensGold.opacity(0.16)))
             }
             .buttonStyle(.plain)
         }
     }
 }
 
-private struct GameModeRibbon: View {
-    let financePro: Bool
-
+private struct GameRibbon: View {
     var body: some View {
         HStack(spacing: 7) {
-            Capsule()
-                .fill(financePro ? Color.konsensBlue : Color.konsensGreen)
-                .frame(width: 31, height: 2)
-            Text(financePro ? "MODE FINANCE PRO · ANALYSE DÉTAILLÉE" : "PATRIMOINE = SCORE · JOUE · INVESTIS · GRIMPE")
-                .font(.system(size: 6, weight: .black, design: financePro ? .monospaced : .rounded))
-                .tracking(0.7)
-                .foregroundStyle(financePro ? Color.konsensBlue : Color.konsensGreen)
+            Capsule().fill(Color.konsensPink).frame(width: 28, height: 2)
+            Text("KOINS · PARIS · INVEST · LIGUE")
+                .font(.system(size: 7, weight: .black, design: .rounded))
+                .tracking(0.9)
+                .foregroundStyle(Color.konsensGold)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 6)
     }
 }
 
-private struct FloatingDock: View {
+private struct GameDock: View {
     @EnvironmentObject private var store: AppStore
-    let financePro: Bool
-
-    private var tabs: [AppTab] {
-        financePro ? AppTab.financeTabs : AppTab.gameTabs
-    }
+    private let tabs = AppTab.gameTabs
 
     var body: some View {
         VStack(spacing: 0) {
-            Capsule()
-                .fill(financePro ? Color.konsensBlue.opacity(0.75) : Color.konsensGreen.opacity(0.75))
-                .frame(height: 2)
-                .padding(.horizontal, 12)
+            Capsule().fill(Color.konsensViolet.opacity(0.75)).frame(height: 2).padding(.horizontal, 12)
             HStack(spacing: 3) {
                 ForEach(tabs, id: \.self) { tab in
                     Button {
                         withAnimation(.easeOut(duration: 0.2)) { store.selectedTab = tab }
                     } label: {
                         VStack(spacing: 3) {
-                            Image(systemName: tab.symbol)
-                                .font(.system(size: 16, weight: .semibold))
-                            Text(tab.title)
-                                .font(.system(size: 7, weight: .semibold, design: .rounded))
+                            Image(systemName: symbol(for: tab)).font(.system(size: 16, weight: .semibold))
+                            Text(title(for: tab)).font(.system(size: 7, weight: .black, design: .rounded))
                         }
                         .foregroundStyle(store.selectedTab == tab ? accent(for: tab) : Color.konsensMuted)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
-                        .background(
-                            store.selectedTab == tab ? accent(for: tab).opacity(0.11) : Color.clear,
-                            in: RoundedRectangle(cornerRadius: financePro ? 8 : 14)
-                        )
+                        .background(store.selectedTab == tab ? accent(for: tab).opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 14))
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(5)
         }
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: financePro ? 14 : 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: financePro ? 14 : 22).stroke(Color.white.opacity(0.08)))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22).stroke(Color.white.opacity(0.08)))
         .shadow(color: Color.black.opacity(0.35), radius: 26, y: 14)
     }
 
-    private func accent(for tab: AppTab) -> Color {
-        if financePro {
-            switch tab {
-            case .play: return Color.konsensViolet
-            case .invest: return Color.konsensBlue
-            case .learn: return Color.konsensGreen
-            default: return Color.konsensBlue
-            }
+    private func title(for tab: AppTab) -> String {
+        switch tab {
+        case .wealth: "Jouer"
+        case .play: "Paris"
+        case .invest: "Invest"
+        case .league: "Ligue"
+        case .profile: "Moi"
+        case .learn: "Learn"
         }
+    }
+
+    private func symbol(for tab: AppTab) -> String {
+        switch tab {
+        case .wealth: "gamecontroller.fill"
+        case .play: "bolt.fill"
+        case .invest: "chart.line.uptrend.xyaxis"
+        case .league: "trophy.fill"
+        case .profile: "person.crop.circle.fill"
+        case .learn: "book.closed.fill"
+        }
+    }
+
+    private func accent(for tab: AppTab) -> Color {
         switch tab {
         case .wealth: return Color.konsensGreen
-        case .play: return Color.konsensViolet
+        case .play: return Color.konsensPink
         case .invest: return Color.konsensBlue
         case .league: return Color.konsensGold
         case .profile: return Color.konsensViolet
@@ -355,21 +292,21 @@ private struct LockedView: View {
     var body: some View {
         VStack(spacing: 18) {
             KonsensMark()
-            Image(systemName: "faceid")
-                .font(.system(size: 52))
-                .foregroundStyle(Color.konsensGreen)
-            Text("Ton patrimoine est verrouillé")
-                .font(.title2.bold())
-            Text("Utilise Face ID pour retrouver tes Koins, tes challenges et ta ligue.")
+            Image(systemName: "lock.circle.fill")
+                .font(.system(size: 58))
+                .foregroundStyle(Color.konsensGold)
+            Text("Ton coffre est verrouillé")
+                .font(.title2.black())
+            Text("Face ID protège tes Koins, tes paris et ta ligue.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Color.konsensMuted)
                 .font(.subheadline)
-            Button("Déverrouiller avec Face ID", action: unlock)
-                .font(.headline)
+            Button("OUVRIR MON COFFRE", action: unlock)
+                .font(.system(size: 14, weight: .black, design: .rounded))
                 .foregroundStyle(Color.konsensBackground)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 13)
-                .background(Color.konsensGreen, in: Capsule())
+                .background(Color.konsensGold, in: Capsule())
         }
         .padding(30)
     }
