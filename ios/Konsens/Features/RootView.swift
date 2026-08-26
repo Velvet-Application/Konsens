@@ -1,6 +1,8 @@
 import SwiftUI
 import LocalAuthentication
 import UIKit
+import RealityKit
+import simd
 
 struct RootView: View {
     @EnvironmentObject private var store: AppStore
@@ -74,6 +76,10 @@ struct RootView: View {
             } else if unlocked && store.isAuthenticated && store.onboardingComplete {
                 mascot.start(username: store.username)
             }
+        }
+        .onChange(of: store.selectedTab) { _, tab in
+            guard unlocked, !isFinancePro else { return }
+            mascot.react(.navigation(tab.title), username: store.username)
         }
         .onChange(of: store.wealth.total) { oldValue, newValue in
             guard unlocked, !isFinancePro, oldValue > 0 else { return }
@@ -409,16 +415,49 @@ private struct LockedView: View {
     }
 }
 
-// MARK: - Konsens mascot
+// MARK: - Konsens mascot · RealityKit/USDZ
 
 private final class KonsensMascotDirector: ObservableObject {
     enum Phase: Equatable { case hidden, launch, peek, reaction }
     enum CoinEffect: Equatable { case none, gain, loss, stake }
-    enum Signal: Equatable { case betPlaced, investment, rejected, gain(Int), loss(Int) }
+    enum Action: String, Equatable {
+        case idle
+        case wave
+        case peek
+        case laugh
+        case tease
+        case coinToss
+        case celebrate
+        case lose
+        case shrug
+
+        var clipHints: [String] {
+            switch self {
+            case .idle: return ["idle", "breath"]
+            case .wave: return ["wave", "hello", "opening", "welcome"]
+            case .peek: return ["peek", "appear", "look"]
+            case .laugh: return ["laugh", "chuckle"]
+            case .tease: return ["tease", "taunt", "wink", "point"]
+            case .coinToss: return ["coin_toss", "coin", "toss", "bet"]
+            case .celebrate: return ["celebrate", "win", "victory", "happy"]
+            case .lose: return ["lose", "loss", "fail", "coin_disappear"]
+            case .shrug: return ["shrug", "rejected", "no_money"]
+            }
+        }
+    }
+    enum Signal: Equatable {
+        case betPlaced
+        case investment
+        case rejected
+        case gain(Int)
+        case loss(Int)
+        case navigation(String)
+    }
 
     @Published var phase: Phase = .hidden
     @Published var message = ""
     @Published var coinEffect: CoinEffect = .none
+    @Published var action: Action = .idle
     @Published var presentationID = UUID()
 
     private var started = false
@@ -430,16 +469,17 @@ private final class KonsensMascotDirector: ObservableObject {
         started = true
         present(
             phase: .launch,
-            message: "Alors @\(username)… prêt à faire mieux que tes potes ?",
+            message: "Salut @\(username). Prêt à faire mieux que tes potes ?",
             coin: .gain,
+            action: .wave,
             duration: 4
         )
         randomTask = Task { @MainActor [weak self] in
-            try? await Task<Never, Never>.sleep(nanoseconds: 38_000_000_000)
+            try? await Task<Never, Never>.sleep(nanoseconds: 28_000_000_000)
             while !Task.isCancelled {
                 guard let self else { return }
                 self.randomPeek()
-                let seconds = UInt64(Int.random(in: 38...78))
+                let seconds = UInt64(Int.random(in: 28...65))
                 try? await Task<Never, Never>.sleep(nanoseconds: seconds * 1_000_000_000)
             }
         }
@@ -454,6 +494,7 @@ private final class KonsensMascotDirector: ObservableObject {
         withAnimation(.easeOut(duration: 0.2)) {
             phase = .hidden
             coinEffect = .none
+            action = .idle
         }
     }
 
@@ -468,6 +509,7 @@ private final class KonsensMascotDirector: ObservableObject {
                     "C’est parti. Je garde un œil sur tes Koins."
                 ].randomElement()!,
                 coin: .stake,
+                action: .coinToss,
                 duration: 3
             )
         case .investment:
@@ -479,6 +521,7 @@ private final class KonsensMascotDirector: ObservableObject {
                     "Ça, c’est plus élégant que de tout miser au hasard."
                 ].randomElement()!,
                 coin: .stake,
+                action: .tease,
                 duration: 3
             )
         case .rejected:
@@ -486,45 +529,72 @@ private final class KonsensMascotDirector: ObservableObject {
                 phase: .reaction,
                 message: "Même moi, je ne peux pas miser des Koins que tu n’as pas.",
                 coin: .none,
+                action: .shrug,
                 duration: 3
             )
         case .gain(let amount):
-            let special = amount == 100 ? "100 K récupérés. Belle récolte." : "+\(amount) K. Ah… là, tu commences à devenir agaçant."
-            present(phase: .reaction, message: special, coin: .gain, duration: 3)
+            let line = amount == 100
+                ? "100 K récupérés. Belle récolte."
+                : "+\(amount) K. Ah… là, tu commences à devenir agaçant."
+            present(phase: .reaction, message: line, coin: .gain, action: .celebrate, duration: 3)
         case .loss(let amount):
             present(
                 phase: .reaction,
                 message: [
                     "−\(amount) K. Et hop… un Koin qui s’évapore.",
-                    "Aïe. \(amount) K viennent de changer de propriétaire imaginaire.",
+                    "Aïe. \(amount) K viennent de disparaître. Beau geste.",
                     "On va faire comme si personne dans ta ligue n’avait vu ça."
                 ].randomElement()!,
                 coin: .loss,
+                action: .lose,
                 duration: 3
             )
+        case .navigation(let destination):
+            let lower = destination.lowercased()
+            let line: String
+            let nextAction: Action
+            if lower.contains("ligue") {
+                line = "Va voir le classement. J’espère que tu n’as pas besoin de scroller trop bas."
+                nextAction = .tease
+            } else if lower.contains("jou") || lower.contains("mis") {
+                line = "Ah, on vient jouer ? Là ça devient intéressant."
+                nextAction = .peek
+            } else if lower.contains("invest") {
+                line = "Investir ? Essaie de faire semblant d’avoir un plan."
+                nextAction = .tease
+            } else if lower.contains("appr") || lower.contains("acad") {
+                line = "Un peu de théorie. Ça peut sauver quelques Koins."
+                nextAction = .wave
+            } else {
+                line = "Je te suis. Quelqu’un doit surveiller tes décisions."
+                nextAction = .peek
+            }
+            present(phase: .peek, message: line, coin: .none, action: nextAction, duration: 2)
         }
     }
 
     private func randomPeek() {
         guard phase == .hidden else { return }
-        let lines = [
-            "Je surveille ton classement. Ça peut encore s’arranger.",
-            "T’as un plan… ou tu cliques au talent ?",
-            "Ton pote devant toi commence à se détendre. Mauvaise idée.",
-            "Un petit pari ? Qu’est-ce qui pourrait mal se passer ?",
-            "Je dis ça, je dis rien… mais ta ligue n’attend pas.",
-            "Je passais juste voir si tes Koins travaillaient vraiment.",
-            "Encore quelques bons coups et tu pourras vraiment les chambrer."
+        let moments: [(String, Action)] = [
+            ("Je surveille ton classement. Ça peut encore s’arranger.", .peek),
+            ("T’as un plan… ou tu cliques au talent ?", .tease),
+            ("Ton pote devant toi commence à se détendre. Mauvaise idée.", .tease),
+            ("Un petit pari ? Qu’est-ce qui pourrait mal se passer ?", .peek),
+            ("Je dis ça, je dis rien… mais ta ligue n’attend pas.", .wave),
+            ("Je passais juste voir si tes Koins travaillaient vraiment.", .peek),
+            ("Encore quelques bons coups et tu pourras vraiment les chambrer.", .laugh)
         ]
-        present(phase: .peek, message: lines.randomElement()!, coin: .none, duration: 4)
+        let moment = moments.randomElement()!
+        present(phase: .peek, message: moment.0, coin: .none, action: moment.1, duration: 4)
     }
 
-    private func present(phase nextPhase: Phase, message: String, coin: CoinEffect, duration: UInt64) {
+    private func present(phase nextPhase: Phase, message: String, coin: CoinEffect, action: Action, duration: UInt64) {
         hideTask?.cancel()
         presentationID = UUID()
         withAnimation(.spring(response: 0.42, dampingFraction: 0.78)) {
             self.message = message
             self.coinEffect = coin
+            self.action = action
             self.phase = nextPhase
         }
         let id = presentationID
@@ -534,6 +604,7 @@ private final class KonsensMascotDirector: ObservableObject {
             withAnimation(.easeInOut(duration: 0.28)) {
                 self.phase = .hidden
                 self.coinEffect = .none
+                self.action = .idle
             }
         }
     }
@@ -546,38 +617,38 @@ private struct KonsensMascotLayer: View {
         GeometryReader { proxy in
             ZStack {
                 if director.phase == .launch {
-                    Color.black.opacity(0.34)
+                    Color.black.opacity(0.35)
                         .ignoresSafeArea()
                         .transition(.opacity)
 
-                    VStack(spacing: 14) {
-                        Spacer(minLength: 42)
-                        KonsensMascotFullArtwork()
-                            .frame(width: min(proxy.size.width * 0.82, 360))
+                    VStack(spacing: 10) {
+                        Spacer(minLength: 20)
+                        mascot(fullSize: true)
+                            .frame(width: min(proxy.size.width * 0.92, 390), height: min(proxy.size.height * 0.58, 470))
                         MascotSpeechBubble(text: director.message, prominent: true)
-                            .frame(maxWidth: min(proxy.size.width - 42, 360))
-                        Spacer(minLength: 90)
+                            .frame(maxWidth: min(proxy.size.width - 40, 370))
+                        Spacer(minLength: 76)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .transition(.scale(scale: 0.86).combined(with: .opacity))
                 } else if director.phase == .peek || director.phase == .reaction {
                     VStack {
                         Spacer()
-                        HStack(alignment: .bottom, spacing: 8) {
-                            Spacer(minLength: 18)
+                        HStack(alignment: .bottom, spacing: 6) {
+                            Spacer(minLength: 14)
                             MascotSpeechBubble(text: director.message, prominent: false)
-                                .frame(maxWidth: min(proxy.size.width * 0.62, 250))
-                            KonsensMascotHeadArtwork()
-                                .frame(width: 148, height: 158)
+                                .frame(maxWidth: min(proxy.size.width * 0.60, 245))
+                            mascot(fullSize: false)
+                                .frame(width: 158, height: 188)
                                 .offset(x: 24)
                         }
-                        .padding(.bottom, 118)
+                        .padding(.bottom, 112)
                     }
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
 
-                if director.coinEffect != .none {
-                    MascotCoinEffectView(effect: director.coinEffect)
+                if director.coinEffect != .none && !KonsensMascot3DView.isAvailable {
+                    MascotCoinFallback(effect: director.coinEffect)
                         .id(director.presentationID)
                 }
             }
@@ -587,56 +658,176 @@ private struct KonsensMascotLayer: View {
         .allowsHitTesting(false)
         .animation(.spring(response: 0.42, dampingFraction: 0.8), value: director.phase)
     }
-}
 
-private struct KonsensMascotFullArtwork: View {
-    @State private var floating = false
-
-    var body: some View {
-        Image(uiImage: KonsensMascotArtwork.full)
-            .resizable()
-            .scaledToFit()
-            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .stroke(Color.konsensGold.opacity(0.28), lineWidth: 1)
-            )
-            .shadow(color: Color.konsensGold.opacity(0.22), radius: 34, y: 16)
-            .offset(y: floating ? -5 : 5)
-            .rotation3DEffect(
-                .degrees(floating ? 2.4 : -2.4),
-                axis: (x: 0.08, y: 1, z: 0),
-                perspective: 0.72
-            )
-            .onAppear {
-                withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
-                    floating = true
-                }
-            }
+    @ViewBuilder
+    private func mascot(fullSize: Bool) -> some View {
+        if KonsensMascot3DView.isAvailable {
+            KonsensMascot3DView(action: director.action, presentationID: director.presentationID)
+                .clipShape(RoundedRectangle(cornerRadius: fullSize ? 30 : 38, style: .continuous))
+                .shadow(color: Color.konsensGold.opacity(fullSize ? 0.20 : 0.10), radius: fullSize ? 28 : 14, y: 10)
+        } else {
+            KonsensMascotFallback(fullSize: fullSize)
+        }
     }
 }
 
-private struct KonsensMascotHeadArtwork: View {
-    @State private var tilt = false
+private struct KonsensMascot3DView: UIViewRepresentable {
+    let action: KonsensMascotDirector.Action
+    let presentationID: UUID
+
+    static var isAvailable: Bool {
+        Bundle.main.url(forResource: "KonsensMascot", withExtension: "usdz") != nil
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> ARView {
+        let arView = ARView(frame: .zero, cameraMode: .nonAR, automaticallyConfigureSession: false)
+        arView.backgroundColor = .clear
+        arView.environment.background = .color(.clear)
+        context.coordinator.install(in: arView)
+        return arView
+    }
+
+    func updateUIView(_ uiView: ARView, context: Context) {
+        context.coordinator.play(action: action, presentationID: presentationID)
+    }
+
+    final class Coordinator {
+        private weak var arView: ARView?
+        private var mascot: Entity?
+        private var baseTransform = Transform.identity
+        private var lastPresentationID: UUID?
+        private var pendingAction: KonsensMascotDirector.Action = .idle
+
+        func install(in arView: ARView) {
+            self.arView = arView
+
+            let world = AnchorEntity(world: .zero)
+            arView.scene.addAnchor(world)
+
+            let camera = PerspectiveCamera()
+            camera.camera.fieldOfViewInDegrees = 32
+            camera.look(at: [0, 0.62, 0], from: [0, 0.48, 2.45], relativeTo: nil)
+            world.addChild(camera)
+
+            let key = DirectionalLight()
+            key.light.intensity = 16_000
+            key.look(at: [0, 0.55, 0], from: [1.2, 1.8, 2.0], relativeTo: nil)
+            world.addChild(key)
+
+            let fill = PointLight()
+            fill.light.intensity = 2_800
+            fill.light.attenuationRadius = 4
+            fill.position = [-1.3, 0.8, 1.2]
+            world.addChild(fill)
+
+            do {
+                let entity = try Entity.load(named: "KonsensMascot")
+                entity.name = "KonsensMascot"
+                entity.position = [0, -0.72, 0]
+                entity.scale = SIMD3<Float>(repeating: 0.82)
+                world.addChild(entity)
+                mascot = entity
+                baseTransform = entity.transform
+                play(action: pendingAction, presentationID: UUID())
+            } catch {
+                mascot = nil
+            }
+        }
+
+        func play(action: KonsensMascotDirector.Action, presentationID: UUID) {
+            pendingAction = action
+            guard lastPresentationID != presentationID || action == .idle else { return }
+            lastPresentationID = presentationID
+            guard let mascot else { return }
+
+            mascot.stopAllAnimations(recursive: true)
+            if let match = findAnimation(in: mascot, hints: action.clipHints) {
+                match.entity.playAnimation(match.animation, transitionDuration: 0.16, startsPaused: false)
+                return
+            }
+            playTransformFallback(action, on: mascot)
+        }
+
+        private func findAnimation(in entity: Entity, hints: [String]) -> (entity: Entity, animation: AnimationResource)? {
+            let lowerHints = hints.map { $0.lowercased() }
+            for animation in entity.availableAnimations {
+                let name = animation.name?.lowercased() ?? ""
+                if lowerHints.contains(where: { name.contains($0) }) {
+                    return (entity, animation)
+                }
+            }
+            for child in entity.children {
+                if let found = findAnimation(in: child, hints: hints) { return found }
+            }
+            return nil
+        }
+
+        private func playTransformFallback(_ action: KonsensMascotDirector.Action, on entity: Entity) {
+            entity.transform = baseTransform
+            var target = baseTransform
+
+            switch action {
+            case .idle:
+                target.translation.y += 0.02
+            case .wave:
+                target.rotation = simd_mul(baseTransform.rotation, simd_quatf(angle: -0.10, axis: [0, 1, 0]))
+                target.translation.y += 0.04
+            case .peek:
+                target.rotation = simd_mul(baseTransform.rotation, simd_quatf(angle: 0.16, axis: [0, 1, 0]))
+                target.translation.x += 0.08
+            case .laugh:
+                target.rotation = simd_mul(baseTransform.rotation, simd_quatf(angle: 0.06, axis: [0, 0, 1]))
+                target.translation.y += 0.08
+            case .tease:
+                target.rotation = simd_mul(baseTransform.rotation, simd_quatf(angle: -0.12, axis: [0, 1, 0]))
+                target.translation.x -= 0.04
+            case .coinToss:
+                target.rotation = simd_mul(baseTransform.rotation, simd_quatf(angle: 0.12, axis: [0, 1, 0]))
+                target.translation.y += 0.06
+            case .celebrate:
+                target.translation.y += 0.13
+                target.scale *= 1.04
+            case .lose:
+                target.rotation = simd_mul(baseTransform.rotation, simd_quatf(angle: 0.08, axis: [0, 0, 1]))
+                target.translation.y -= 0.05
+            case .shrug:
+                target.rotation = simd_mul(baseTransform.rotation, simd_quatf(angle: -0.06, axis: [0, 0, 1]))
+            }
+
+            entity.move(to: target, relativeTo: entity.parent, duration: 0.24, timingFunction: .easeInOut)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) { [weak entity] in
+                guard let entity else { return }
+                entity.move(to: self.baseTransform, relativeTo: entity.parent, duration: 0.32, timingFunction: .easeInOut)
+            }
+        }
+    }
+}
+
+private struct KonsensMascotFallback: View {
+    let fullSize: Bool
+    @State private var moving = false
 
     var body: some View {
-        Image(uiImage: KonsensMascotArtwork.head)
+        Image("KonsensMascotFallback")
             .resizable()
-            .scaledToFill()
-            .clipShape(RoundedRectangle(cornerRadius: 38, style: .continuous))
+            .scaledToFit()
+            .clipShape(RoundedRectangle(cornerRadius: fullSize ? 30 : 38, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 38, style: .continuous)
-                    .stroke(Color.konsensGold.opacity(0.55), lineWidth: 1.4)
+                RoundedRectangle(cornerRadius: fullSize ? 30 : 38, style: .continuous)
+                    .stroke(Color.konsensGold.opacity(0.34), lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(0.55), radius: 18, y: 10)
+            .shadow(color: Color.black.opacity(0.46), radius: 18, y: 10)
+            .offset(y: moving ? -5 : 5)
             .rotation3DEffect(
-                .degrees(tilt ? 5 : -3),
+                .degrees(moving ? 3.5 : -2.5),
                 axis: (x: 0.05, y: 1, z: 0),
-                perspective: 0.76
+                perspective: 0.72
             )
             .onAppear {
-                withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
-                    tilt = true
+                withAnimation(.easeInOut(duration: 1.7).repeatForever(autoreverses: true)) {
+                    moving = true
                 }
             }
     }
@@ -669,7 +860,7 @@ private struct MascotSpeechBubble: View {
     }
 }
 
-private struct MascotCoinEffectView: View {
+private struct MascotCoinFallback: View {
     let effect: KonsensMascotDirector.CoinEffect
     @State private var animate = false
 
@@ -678,30 +869,37 @@ private struct MascotCoinEffectView: View {
             Spacer()
             HStack {
                 Spacer()
-                Image(uiImage: KonsensMascotArtwork.coin)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 104, height: 104)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.konsensGold.opacity(0.55), lineWidth: 1))
-                    .shadow(color: Color.konsensGold.opacity(0.48), radius: 20)
-                    .scaleEffect(scale)
-                    .opacity(opacity)
-                    .offset(x: xOffset, y: yOffset)
-                    .rotation3DEffect(
-                        .degrees(animate ? rotation : 0),
-                        axis: (x: 0.12, y: 1, z: 0.08),
-                        perspective: 0.55
-                    )
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.yellow.opacity(0.96), Color.konsensGold, Color.orange.opacity(0.82)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    Circle().stroke(Color.white.opacity(0.52), lineWidth: 2)
+                    Text("K")
+                        .font(.system(size: 48, weight: .black, design: .rounded))
+                        .foregroundStyle(Color.black.opacity(0.70))
+                }
+                .frame(width: 102, height: 102)
+                .shadow(color: Color.konsensGold.opacity(0.55), radius: 20)
+                .scaleEffect(scale)
+                .opacity(opacity)
+                .offset(x: xOffset, y: yOffset)
+                .rotation3DEffect(
+                    .degrees(animate ? rotation : 0),
+                    axis: (x: 0.12, y: 1, z: 0.08),
+                    perspective: 0.55
+                )
                 Spacer()
             }
             Spacer()
         }
         .onAppear {
-            DispatchQueue.main.async {
-                withAnimation(.easeInOut(duration: effect == .loss ? 1.15 : 1.35)) {
-                    animate = true
-                }
+            withAnimation(.easeInOut(duration: effect == .loss ? 1.15 : 1.35)) {
+                animate = true
             }
         }
     }
@@ -726,10 +924,7 @@ private struct MascotCoinEffectView: View {
 
     private var xOffset: CGFloat {
         guard animate else { return 0 }
-        switch effect {
-        case .stake: return 150
-        default: return 0
-        }
+        return effect == .stake ? 150 : 0
     }
 
     private var yOffset: CGFloat {
@@ -750,42 +945,4 @@ private struct MascotCoinEffectView: View {
         case .none: return 0
         }
     }
-}
-
-private enum KonsensMascotArtwork {
-    static let full: UIImage = {
-        guard let data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters),
-              let image = UIImage(data: data) else { return UIImage() }
-        return image
-    }()
-
-    static let head: UIImage = crop(
-        full,
-        normalized: CGRect(x: 0.267, y: 0.028, width: 0.508, height: 0.435)
-    )
-
-    static let coin: UIImage = crop(
-        full,
-        normalized: CGRect(x: 0.07, y: 0.255, width: 0.37, height: 0.30)
-    )
-
-    private static func crop(_ image: UIImage, normalized rect: CGRect) -> UIImage {
-        guard let cg = image.cgImage else { return image }
-        let width = CGFloat(cg.width)
-        let height = CGFloat(cg.height)
-        let cropRect = CGRect(
-            x: rect.origin.x * width,
-            y: rect.origin.y * height,
-            width: rect.size.width * width,
-            height: rect.size.height * height
-        ).integral.intersection(CGRect(x: 0, y: 0, width: width, height: height))
-        guard let cropped = cg.cropping(to: cropRect) else { return image }
-        return UIImage(cgImage: cropped, scale: image.scale, orientation: image.imageOrientation)
-    }
-
-    // Canonical artwork approved for Konsens. Keeping the render embedded guarantees
-    // the mascot displayed in the app is pixel-faithful to the approved character.
-    private static let base64 = """
-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
-"""
 }
