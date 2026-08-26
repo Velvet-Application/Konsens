@@ -1,0 +1,50 @@
+{
+  "asset": "KonsensMascot.usdz",
+  "canonVersion": 1,
+  "platform": "iOS RealityKit",
+  "minimumIOS": "17.0",
+  "requiredClips": [
+    "idle_breath",
+    "wave_welcome",
+    "peek_appear",
+    "laugh_chuckle",
+    "tease_point_wink",
+    "coin_toss",
+    "celebrate_victory",
+    "lose_coin_disappear",
+    "shrug_no_money"
+  ],
+  "optionalClips": [
+    "facepalm",
+    "look_left",
+    "look_right",
+    "nod_yes",
+    "shake_no",
+    "dance_short",
+    "jackpot",
+    "league_taunt"
+  ],
+  "facialExpressions": [
+    "neutral_smile",
+    "broad_smile",
+    "smirk",
+    "laugh",
+    "wink_left",
+    "wink_right",
+    "eyebrow_raise",
+    "mock_disappointed"
+  ],
+  "coinProp": {
+    "label": "KONSENS K KOINS",
+    "separateRiggedProp": true,
+    "requiredBehaviours": ["appear", "toss", "spin", "fall", "disappear"]
+  },
+  "runtime": {
+    "openingAction": "wave_welcome",
+    "betAction": "coin_toss",
+    "gainAction": "celebrate_victory",
+    "lossAction": "lose_coin_disappear",
+    "rejectedAction": "shrug_no_money",
+    "randomActions": ["peek_appear", "tease_point_wink", "laugh_chuckle"]
+  }
+}
