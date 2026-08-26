@@ -1,8 +1,9 @@
 import Foundation
+import Combine
 import GoogleMobileAds
 
 @MainActor
-final class AdsService: NSObject, ObservableObject, FullScreenContentDelegate {
+final class AdsService: NSObject, ObservableObject {
     static let shared = AdsService()
 
     @Published private(set) var rewardedReady = false
@@ -23,14 +24,15 @@ final class AdsService: NSObject, ObservableObject, FullScreenContentDelegate {
 
     func loadRewarded(force: Bool = false) async {
         guard !isLoading else { return }
-        if rewardedAd != nil, !force { rewardedReady = true; return }
+        if rewardedAd != nil, !force {
+            rewardedReady = true
+            return
+        }
 
         isLoading = true
         lastError = nil
         do {
-            let ad = try await RewardedAd.load(with: rewardedUnitID, request: Request())
-            ad.fullScreenContentDelegate = self
-            rewardedAd = ad
+            rewardedAd = try await RewardedAd.load(with: rewardedUnitID, request: Request())
             rewardedReady = true
         } catch {
             rewardedAd = nil
@@ -40,8 +42,8 @@ final class AdsService: NSObject, ObservableObject, FullScreenContentDelegate {
         isLoading = false
     }
 
-    /// Returns true when the ad presentation has started. The action is executed only after
-    /// Google reports that the user earned the reward, which makes it suitable as the free-player bet gate.
+    /// Returns true when presentation can start. For a free player, the bet action is
+    /// executed only from Google's earned-reward callback.
     @discardableResult
     func presentRewarded(onReward: @escaping () -> Void) -> Bool {
         guard let ad = rewardedAd else {
@@ -52,6 +54,10 @@ final class AdsService: NSObject, ObservableObject, FullScreenContentDelegate {
         rewardedAd = nil
         rewardedReady = false
         pendingReward = onReward
+
+        // Start preparing the next rewarded ad immediately; the displayed instance remains alive locally.
+        Task { await loadRewarded(force: true) }
+
         ad.present(from: nil) { [weak self] in
             guard let self else { return }
             let rewardAction = self.pendingReward
@@ -59,20 +65,5 @@ final class AdsService: NSObject, ObservableObject, FullScreenContentDelegate {
             rewardAction?()
         }
         return true
-    }
-
-    func adDidDismissFullScreenContent(_ ad: FullScreenPresentingAd) {
-        pendingReward = nil
-        Task { await loadRewarded(force: true) }
-    }
-
-    func ad(
-        _ ad: FullScreenPresentingAd,
-        didFailToPresentFullScreenContentWithError error: Error
-    ) {
-        pendingReward = nil
-        lastError = error.localizedDescription
-        rewardedReady = false
-        Task { await loadRewarded(force: true) }
     }
 }
