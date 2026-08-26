@@ -4,6 +4,10 @@ import SwiftUI
 struct KonsensApp: App {
     @StateObject private var store = AppStore()
 
+    init() {
+        _ = AdsService.shared
+    }
+
     var body: some Scene {
         WindowGroup {
             KonsensGameRootView()
