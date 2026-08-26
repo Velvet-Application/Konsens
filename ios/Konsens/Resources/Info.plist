@@ -11,7 +11,13 @@
     <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
     <key>CFBundleURLTypes</key>
     <array><dict><key>CFBundleURLName</key><string>com.konsens.beta.auth</string><key>CFBundleURLSchemes</key><array><string>konsens</string></array></dict></array>
-    <key>NSFaceIDUsageDescription</key><string>Face ID protège l’accès à ton patrimoine virtuel, tes investissements et tes prédictions Konsens.</string>
+    <key>GADApplicationIdentifier</key><string>ca-app-pub-3940256099942544~1458002511</string>
+    <key>NSFaceIDUsageDescription</key><string>Face ID protège l’accès à tes Koins, tes paris et ta ligue Konsens.</string>
+    <key>NSUserTrackingUsageDescription</key><string>Konsens peut utiliser cet identifiant pour proposer et mesurer des publicités plus pertinentes.</string>
+    <key>SKAdNetworkItems</key>
+    <array>
+        <dict><key>SKAdNetworkIdentifier</key><string>cstr6suwn9.skadnetwork</string></dict>
+    </array>
     <key>UILaunchScreen</key><dict><key>UIColorName</key><string></string></dict>
     <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
 </dict>

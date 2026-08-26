@@ -3,11 +3,14 @@ import SwiftUI
 @main
 struct KonsensApp: App {
     @StateObject private var store = AppStore()
+    @StateObject private var ads = AdMobService()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(store)
+                .environmentObject(ads)
+                .task { await ads.configure() }
                 .onOpenURL { url in
                     Task {
                         do {
