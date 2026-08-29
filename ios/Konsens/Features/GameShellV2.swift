@@ -950,13 +950,13 @@ private final class KonsensBanterDirector: ObservableObject {
         }
     }
 
-    func say(_ line: String, duration: UInt64 = 3) {
+    func say(_ line: String, duration: Double = 3.0) {
         hideTask?.cancel()
         id = UUID()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) { text = line }
         let current = id
         hideTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: duration * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
             guard let self, self.id == current else { return }
             withAnimation(.easeOut(duration: 0.2)) { self.text = nil }
         }
@@ -971,7 +971,7 @@ private struct KonsensBanterOverlay: View {
             if let text = director.text {
                 HStack(spacing: 8) {
                     Text("K")
-                        .font(.caption.black())
+                        .font(.caption.weight(.black))
                         .foregroundStyle(Color.black)
                         .frame(width: 25, height: 25)
                         .background(Color.konsensGold, in: Circle())
